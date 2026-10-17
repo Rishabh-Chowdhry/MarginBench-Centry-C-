@@ -1,0 +1,46 @@
+seed=20261018 alpha=0.2 eps=0.05
+[P1] Validity of LEXIS under adaptive generation, allocation and stopping
+  all-null reservoirs: P(any false confirmation)               0.0100 ±0.0080  (claim <= 0.0500)  PASS
+  mixed reservoirs: P(any confirmed candidate has p <= alpha)   0.0017 ±0.0033  (claim <= 0.0500)  PASS
+  adversarial continuation, p = alpha for all candidates       0.0107 ±0.0052  (claim <= 0.0500)  PASS
+[P4] Wald bound on expected confirmation time (fixed Kelly bet)
+  p1=0.4 p=0.4: E[tau] emp   38.10; lower (Kaufmann-type)  26.88; Wald upper  41.87  PASS
+  p1=0.4 p=0.6: E[tau] emp   13.22; lower (Kaufmann-type)   7.37; Wald upper  14.57  PASS
+  p1=0.6 p=0.6: E[tau] emp   10.74; lower (Kaufmann-type)   7.37; Wald upper  12.54  PASS
+[P2/P3] Anytime-valid non-discovery certificates under adversarial stopping
+  zero-failure bound, q=0.002: P(q > U at optimistic stop)     0.0476 ±0.0030  (claim <= 0.0500)  PASS
+      exact worst case (1-q)^n0 = 0.0499
+  zero-failure bound, q=0.01: P(q > U at optimistic stop)      0.0484 ±0.0030  (claim <= 0.0500)  PASS
+      exact worst case (1-q)^n0 = 0.0495
+  zero-failure bound, q=0.05: P(q > U at optimistic stop)      0.0507 ±0.0030  (claim <= 0.0500)  PASS
+      exact worst case (1-q)^n0 = 0.0485
+  betting upper CS, q=0.05: P(exists n<=150: q > U_n)          0.0000 ±0.0000  (claim <= 0.0500)  PASS
+  betting upper CS, q=0.3: P(exists n<=150: q > U_n)           0.0150 ±0.0097  (claim <= 0.0500)  PASS
+[P6] Fixed-weight level scheduling: uniform weights are minimax
+  uniform      findable level 1: mean slots to stop    2718.0
+  uniform      findable level 2: mean slots to stop    2787.1
+  uniform      findable level 3: mean slots to stop    2912.5
+  uniform      findable level 4: mean slots to stop    2699.6
+  cheap-first  findable level 1: mean slots to stop    1066.8
+  cheap-first  findable level 2: mean slots to stop    3248.4
+  cheap-first  findable level 3: mean slots to stop    6455.3
+  cheap-first  findable level 4: mean slots to stop   12798.1
+  worst case: uniform 2912.5 vs cheap-first 12798.1  PASS
+[P5] Necessity counterexamples (each rule removed)
+  baseline (all rules kept), fixed bet                         0.0407 ±0.0027  (claim <= 0.0500)  PASS
+  CE1 every result duplicated: exceeds eps                     0.1840 ±0.0054  (claim >= 0.0500)  PASS
+      (theory: crossing E^2 >= 1/eps  <=> E >= eps^-1/2, so error <= sqrt(eps) = 0.224)
+      CE2 applied success prob p_eff = 0.243 > alpha; KL = 0.0056
+  CE2 crash->fresh retry, plug-in bet, slot cap 100            0.0922 ±0.0090  (claim >= 0.0500)  PASS
+  CE2 crash->fresh retry, plug-in bet, slot cap 1000           0.6225 ±0.0150  (claim >= 0.0500)  PASS
+  CE2 crash->fresh retry, plug-in bet, slot cap 4000           0.9985 ±0.0012  (claim >= 0.0500)  PASS
+      (theory: a consistent test rejects p_eff > alpha a.s., so error -> 1 as cap -> inf; at cap 4000: 0.999)
+  CE3 arrival order,  1 slots in flight                        0.0302 ±0.0053  (claim <= 0.0500)  PASS
+  CE3 arrival order,  8 slots in flight                        0.2188 ±0.0128  (claim >= 0.0500)  PASS
+  CE3 arrival order, 64 slots in flight                        1.0000 ±0.0000  (claim >= 0.0500)  PASS
+  CE5 shared fixed seeds reused for selection and confirmation   0.6985 ±0.0142  (claim >= 0.0500)  PASS
+ALL PROVEN-BOUND CHECKS PASS
+
+real	1m36.089s
+user	1m32.162s
+sys	0m3.956s

@@ -39,8 +39,20 @@ def test_confirmation_lowers_frontier_and_prunes_higher_levels():
     led.check_invariants()
 
 
+def test_poly_lease_schedule_never_exhausts_and_sums_below_eps():
+    led = fresh(lease_size=4)
+    amounts = [led.apply("grant", sender=f"w{i}.1", amount=1.0, now=0)["amount"] for i in range(200)]
+    assert all(a > 0 for a in amounts) and sum(amounts) <= 0.05
+    assert math.isclose(amounts[0], 0.05 / 2) and math.isclose(amounts[9], 0.05 / 110)
+    lid = 1
+    for c in range(4):
+        assert led.apply("register", sender="w0.1", lease_id=lid, content=c, level=1, now=0)["ok"]
+    assert led.apply("register", sender="w0.1", lease_id=lid, content=9, level=1, now=0)["reason"] == "LEASE_FULL"
+    led.check_invariants()
+
+
 def test_request_idempotency_no_double_spend():
-    led = fresh()
+    led = fresh(lease_policy="fraction")
     g = led.apply("grant", sender="w0.1", req_id=1, amount=0.01, now=0)
     r1 = led.apply("register", sender="w0.1", req_id=2, lease_id=g["lease_id"], content=5, level=1, now=0)
     r2 = led.apply("register", sender="w0.1", req_id=2, lease_id=g["lease_id"], content=5, level=1, now=0)

@@ -12,7 +12,7 @@ class LedgerNode:
     """Hosts the Ledger state machine. A crash loses volatile state; recovery
     replays the durable journal (write-ahead: an op is journaled before it runs)."""
 
-    def __init__(self, engine, net, cfg, run_key, worker_names, tick=5.0):
+    def __init__(self, engine, net, cfg, run_key, worker_names, tick=5.0, stop_at_level=1):
         self.engine, self.net, self.cfg, self.run_key = engine, net, cfg, run_key
         self.ledger = Ledger(cfg, run_key)
         self.workers = worker_names
@@ -20,6 +20,7 @@ class LedgerNode:
         self.tick_interval = tick
         self.seq = 0
         self.recoveries = []          # (crash_time, recover_time, digest_equal)
+        self.stop_at_level = stop_at_level   # measurement stop (e.g. k*); 1 = only when unimprovable
         net.attach(LEDGER, self.on_message)
         engine.after(tick, self._tick)
 
@@ -45,7 +46,7 @@ class LedgerNode:
                 body, kind = {"j": ev[1], "status": ev[2], "seq": self.seq}, "status"
             for w in self.workers:
                 self.net.send(Message(kind, LEDGER, w, -self.seq, body))
-        if self.ledger.b_hat == 1:
+        if self.ledger.b_hat <= self.stop_at_level:
             self.engine.stopped = True
 
     def _tick(self):
@@ -58,10 +59,7 @@ class LedgerNode:
 
     def _exhausted(self):
         led = self.ledger
-        if led.slots_leased < self.cfg.max_slots:
-            return False
-        return not any(s["state"] == "LEASED" for s in led.slots.values()) and \
-            not any(a["state"] == "LEASED" for a in led.audits.values())
+        return led.slots_leased >= self.cfg.max_slots and led.outstanding() == 0
 
     def crash(self, downtime):
         if not self.up:
@@ -94,6 +92,7 @@ class WorkerConfig:
     rotate_after: int = 8         # registrations per budget lease before closing it
     rpc_timeout: float = 2.0
     poll: float = 1.0
+    level_weights: tuple = None   # scheduling weights per cost level; None = uniform (minimax, Prop. 6)
 
 
 class Worker:
@@ -173,6 +172,13 @@ class Worker:
             pass
         self.engine.after(self.w.poll, self._schedule, inc)
 
+    def _pick_level(self, levels):
+        if self.w.level_weights is None:
+            return int(self.rng.choice(levels))
+        w = [self.w.level_weights[k - 1] for k in levels]
+        tot = sum(w)
+        return int(self.rng.choice(levels, p=[x / tot for x in w]))
+
     def _active_levels(self):
         return [k for k in range(1, self.l.levels + 1) if k < self.view]
 
@@ -193,7 +199,7 @@ class Worker:
             self._call("lease_slots", {"j": j, "count": n}, lambda r, j=j, n=n: self._on_slots(j, n, r))
             return True
         if self.lease is not None and len(self.cands) + self._registering < self.w.pool:
-            level = int(self.rng.choice(levels))
+            level = self._pick_level(levels)
             content = int(self.rng.integers(self.sc.levels[level - 1].space))
             self._registering += 1
             self._call("register", {"lease_id": self.lease, "content": content, "level": level},
@@ -212,11 +218,15 @@ class Worker:
         if r.get("ok"):
             self.cands[r["j"]] = {"level": level, "content": content, "inflight": 0}
             self.registered_on_lease += 1
-            if self.registered_on_lease >= self.w.rotate_after and self.lease is not None:
+            limit = self.l.lease_size if self.l.lease_policy == "poly" else self.w.rotate_after
+            if self.registered_on_lease >= limit and self.lease is not None:
                 # rotate: fence this lease and reclaim its unspent tail (R5)
                 self._call("close_lease", {"lease_id": self.lease}, lambda r: None)
                 self.lease = None
         elif r.get("reason") in ("LEASE_CLOSED", "UNKNOWN_LEASE"):
+            self.lease = None
+        elif r.get("reason") == "LEASE_FULL" and self.lease is not None:
+            self._call("close_lease", {"lease_id": self.lease}, lambda r: None)
             self.lease = None
 
     def _on_slots(self, j, n, r):

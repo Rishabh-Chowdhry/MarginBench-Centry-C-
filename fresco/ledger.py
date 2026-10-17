@@ -42,6 +42,10 @@ class LedgerConfig:
                                    # makes the certificate informative when nulls sit just below alpha
     slot_ttl: float = 120.0
     budget_lease_ttl: float = 3600.0
+    lease_policy: str = "poly"     # "poly": lease n gets eps/(n(n+1)), split evenly over lease_size
+                                   # registrations (never exhausts); "fraction": the requested amount,
+                                   # polynomial within the lease (Stage 3 policy; starves at large W)
+    lease_size: int = 8
     mode: str = "async"            # "async" (crash -> Y=0) or "replay" (re-run same key)
     bet_cap: float = 0.5
     dedup_content: bool = True
@@ -79,6 +83,7 @@ class Ledger:
                          for k in range(1, cfg.levels + 1)}
         self.unleased = cfg.eps
         self.local_unleased = {}  # worker -> budget (unsafe_local_budget only)
+        self.leases_granted = {}  # budget pool -> number of leases granted (poly policy index n)
         self.b_hat = math.inf
         self.witness = None
         self.confirmations = []   # (j, level, n_slots, time)
@@ -86,6 +91,9 @@ class Ledger:
         self.content_index = {}
         self.responses = {}       # (sender, req_id) -> response (idempotency)
         self.slots_leased = 0
+        self.lease_times = []     # time of every oracle-call lease (for calls-until-t metrics)
+        self.leased = {}          # (j, k) -> None: currently LEASED slots, insertion-ordered
+        self.leased_audits = {}   # (level, i) -> None
         self.next_j = 1
         self.next_lease = 1
         self.stats = {"ignored_records": 0, "duplicate_requests": 0, "expired_slots": 0,
@@ -121,6 +129,10 @@ class Ledger:
             pool = self.local_unleased.setdefault(sender, self.cfg.eps)
         else:
             pool = self.unleased
+        pool_key = sender if self.cfg.unsafe_local_budget else None
+        if self.cfg.lease_policy == "poly":
+            n = self.leases_granted.get(pool_key, 0) + 1
+            amount = self.cfg.eps / (n * (n + 1))          # sum over n <= eps
         x = min(amount, pool)
         if x <= 1e-15:
             return {"ok": False, "reason": "NO_BUDGET"}
@@ -128,6 +140,7 @@ class Ledger:
             self.local_unleased[sender] = pool - x
         else:
             self.unleased -= x
+        self.leases_granted[pool_key] = self.leases_granted.get(pool_key, 0) + 1
         lid = self.next_lease
         self.next_lease += 1
         self.leases[lid] = {"worker": sender, "amount": x, "spent": 0.0, "n": 0, "open": True,
@@ -168,7 +181,12 @@ class Ledger:
         if self.cfg.dedup_content and key in self.content_index:
             return {"ok": False, "reason": "DUPLICATE_CONTENT", "j": self.content_index[key]}
         i = lease["n"] + 1
-        a = lease["amount"] / (i * (i + 1))
+        if self.cfg.lease_policy == "poly":
+            if i > self.cfg.lease_size:
+                return {"ok": False, "reason": "LEASE_FULL"}
+            a = lease["amount"] / self.cfg.lease_size
+        else:
+            a = lease["amount"] / (i * (i + 1))
         lease["n"] = i
         lease["spent"] += a
         j = self.next_j
@@ -221,6 +239,8 @@ class Ledger:
             token = f"{j}:{k}:{slot['attempt']}"
             slot.update(state=LEASED, token=token, worker=sender, t0=now)
             self.slots_leased += 1
+            self.lease_times.append(now)
+            self.leased[(j, k)] = None
             grants.append({"k": k, "key": key, "token": token})
         if not grants:
             return {"ok": False, "reason": "BUDGET" if self.slots_leased >= self.cfg.max_slots else "CAP"}
@@ -234,6 +254,7 @@ class Ledger:
             return {"ok": False, "reason": "UNKNOWN"}
         if slot["state"] == LEASED and slot["token"] == token:
             slot.update(state=DONE, y=y, trace_hash=trace_hash)
+            self.leased.pop((j, k), None)
             if self.cfg.unsafe_arrival_order:
                 self._consume_now(c, j, y, now)
             else:
@@ -307,6 +328,8 @@ class Ledger:
         token = f"A{level}:{i}"
         self.audits[(level, i)] = {"state": LEASED, "token": token, "t0": now, "z": None}
         self.slots_leased += self.cfg.audit_repeats
+        self.lease_times.extend([now] * self.cfg.audit_repeats)
+        self.leased_audits[(level, i)] = None
         return {"ok": True, "level": level, "i": i, "seed": seed, "keys": keys, "token": token}
 
     def _op_record_audit(self, sender, level, i, z, token, now):
@@ -315,6 +338,7 @@ class Ledger:
             self.stats["ignored_records"] += 1
             return {"ok": False, "reason": "STALE_OR_DUPLICATE"}
         a.update(state=DONE, z=z)
+        self.leased_audits.pop((level, i), None)
         self._advance_audit(level)
         return {"ok": True}
 
@@ -332,9 +356,10 @@ class Ledger:
     # ------------------------------------------------------------------ time
     def _op_tick(self, sender, now):
         """Expire slot leases, audit leases and budget leases whose deadline passed."""
-        expired = [(jk, s) for jk, s in self.slots.items()
-                   if s["state"] == LEASED and now > s["t0"] + self.cfg.slot_ttl]
+        expired = [(jk, self.slots[jk]) for jk in self.leased
+                   if now > self.slots[jk]["t0"] + self.cfg.slot_ttl]
         for (j, k), s in expired:
+            del self.leased[(j, k)]
             self.stats["expired_slots"] += 1
             c = self.candidates[j]
             if self.cfg.mode == "replay" or self.cfg.unsafe_fresh_retry:
@@ -347,10 +372,12 @@ class Ledger:
                     self._consume_now(c, j, 0, now)
                 else:
                     self._advance(c, j, now)
-        for (level, i), a in self.audits.items():
-            if a["state"] == LEASED and now > a["t0"] + self.cfg.slot_ttl * self.cfg.audit_repeats:
-                a.update(state=CRASHED, token=None)
-                self._advance_audit(level)
+        for (level, i) in [li for li in self.leased_audits
+                           if now > self.audits[li]["t0"] + self.cfg.slot_ttl * self.cfg.audit_repeats]:
+            a = self.audits[(level, i)]
+            del self.leased_audits[(level, i)]
+            a.update(state=CRASHED, token=None)
+            self._advance_audit(level)
         for lid, lease in self.leases.items():
             if lease["open"] and now > lease["expires"]:
                 self._close(lid)
@@ -368,6 +395,14 @@ class Ledger:
                                         self.cfg.audit_repeats, self.cfg.audit_threshold),
                       "level": self.cfg.audit_level or self.cfg.alpha}
         return out
+
+    def calls_until(self, t):
+        """Oracle calls leased at or before time t."""
+        import bisect
+        return bisect.bisect_right(self.lease_times, t)
+
+    def outstanding(self):
+        return len(self.leased) + len(self.leased_audits)
 
     def report(self):
         return {"b_hat": None if self.b_hat == math.inf else self.b_hat,

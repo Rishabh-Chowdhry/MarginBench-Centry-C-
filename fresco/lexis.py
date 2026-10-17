@@ -28,6 +28,7 @@ class LexisConfig:
     weights: tuple = None      # per-level scheduling weights; None = uniform
     strategy: object = field(default_factory=PlugInKelly)
     stop_on_confirm: bool = False  # stop at the first confirmation (for time-to-first checks)
+    stop_at_level: int = 0         # stop once b_hat <= this level (0 = never)
 
 
 @dataclass
@@ -85,7 +86,7 @@ def run_lexis(reservoirs, cfg, rng):
             if k + 1 < b_hat:
                 b_hat, witness_p = k + 1, p
             current[k] = None
-            if cfg.stop_on_confirm:
+            if cfg.stop_on_confirm or b_hat <= cfg.stop_at_level:
                 break
         elif used + 1 >= cfg.cap:
             current[k] = None          # abandon (futility by cap)

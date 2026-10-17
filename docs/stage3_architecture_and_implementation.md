@@ -345,26 +345,29 @@ docs/                        stage documents
 ## 9. System-level fault injection (synthetic; `sims/stage3_fault_injection.out.txt`)
 **Setup.** All candidates at all levels are nulls at the boundary p = α = 0.2, so every confirmation is false. ε = 0.05. Each configuration runs 400 independent seeds with a 3,000-slot budget (6,000 for W = 8). Each unsafe variant removes **one** rule under the same fault trigger as its FRESCO pair.
 
+Numbers below are from the **Stage 4 rerun** on the updated ledger, which uses the polynomial lease policy and incremental lease tracking (see the Stage 4 doc, §0). The original Stage 3 run, under the earlier lease policy, gave FRESCO 0.007–0.022 and removed-rule rates of 0.117–0.165, with the same qualitative conclusion.
+
 | Configuration (fault trigger) | FRESCO, all rules | Same trigger, one rule removed |
 |---|---|---|
-| Clean (no faults) | 0.022 [0.012, 0.042] | — |
-| **All faults combined**: 10% loss, 20% duplication, 800 s partition of 2/4 workers, worker crashes (1 per 2,000 s each), 2 ledger crashes, executor crashes 0.3 / 0.1 (benign / violating), violations 3× faster, 8 slots in flight | **0.015 [0.007, 0.032]** | — |
-| Network duplication 0.3 → remove dedup (R3) | 0.015 [0.007, 0.032] | **0.142 [0.112, 0.180]** |
-| Outcome-correlated crashes 0.3 / 0.1 → allow fresh-key retry (R4) | 0.007 [0.003, 0.022] | **0.165 [0.132, 0.205]** |
-| Violations 6× faster, 8 in flight → consume in arrival order (R3) | 0.022 [0.012, 0.042] | **0.125 [0.096, 0.161]** |
-| W = 8 workers → worker-local budget (R5) | 0.022 [0.012, 0.042] | **0.117 [0.090, 0.153]** |
+| Clean (no faults) | 0.018 [0.009, 0.036] | — |
+| **All faults combined**: 10% loss, 20% duplication, 800 s partition of 2/4 workers, worker crashes (1 per 2,000 s each), 2 ledger crashes, executor crashes 0.3 / 0.1 (benign / violating), violations 3× faster, 8 slots in flight | **0.003 [0.000, 0.014]** | — |
+| Network duplication 0.3 → remove dedup (R3) | 0.013 [0.005, 0.029] | **0.133 [0.103, 0.169]** |
+| Outcome-correlated crashes 0.3 / 0.1 → allow fresh-key retry (R4) | 0.010 [0.004, 0.025] | **0.102 [0.076, 0.136]** |
+| Violations 6× faster, 8 in flight → consume in arrival order (R3) | 0.018 [0.009, 0.036] | **0.083 [0.059, 0.114]** |
+| W = 8 workers → worker-local budget (R5) | 0.018 [0.009, 0.036] | 0.065 [0.045, 0.094] |
 
-Entries are P(any false confirmation) with 95% Wilson intervals. Runtime: 12 min on 4 cores.
+Entries are P(any false confirmation) with 95% Wilson intervals, 400 seeds each.
 
 **Reading.**
-- With all rules, the implemented protocol keeps the false-confirmation probability below ε = 0.05 in every configuration. That includes the combined-fault setting, with upper confidence limits ≤ 0.042.
-- Removing any single rule raises it to 0.117–0.165. That is 2.3–3.3× the nominal level, and 5–24× the paired FRESCO rate.
+- With all rules, the implemented protocol keeps the false-confirmation probability below ε = 0.05 in every configuration, with upper confidence limits ≤ 0.036.
+- Removing dedup, the fresh-retry ban, or in-order commit raises it to 0.083–0.133. For each of these the lower confidence limit is above ε.
+- Removing the global budget (R5) at W = 8 gives 0.065, but the interval [0.045, 0.094] still contains ε. **At this configuration the inflation from R5 is not established.** Theorem 9 predicts it grows with W (FWER ≈ 1 − (1 − ε₀)^W). The Stage 1 abstract check showed 0.27 at W = 8 under worst-case thresholds, but realistic per-candidate thresholds make each worker's own error small.
 - These are *system-level* reproductions of the Theorem 9 counterexamples through the real ledger, network, and worker code.
 
 **What this does not show.**
 - The fault rates are chosen triggers, not measurements. Effect sizes in a real harness depend on its actual duplicate, crash and latency profiles (hypothesis H-valid, Stage 4).
 - All configurations share seeds 1000–1399. Rows are paired by design, although faults change the trajectory, so the runs are not identical.
-- Coinciding FRESCO rates across rows (e.g. 0.022 = 9/400 in three rows) were checked. The underlying runs differ (distinct ledger digests and registration counts), so the coincidence comes from small counts.
+- Where FRESCO rates coincide across rows (e.g. 0.018 = 7/400), the runs themselves differ (distinct ledger digests and registration counts). The coincidence comes from small counts.
 
 ## 10. What building the system taught us (corrections and open issues)
 1. **Certificates need a gap** (§2.5). Without $\alpha_c > \alpha$, η is valid but vacuous whenever nulls sit near α.

@@ -96,3 +96,80 @@ Time-to-target is censored at the horizon H = 150,000 s (virtual). RMST = restri
 | 8 | 3.42 [3.41, 3.42] | 2.68 [2.67, 2.68] |
 | 16 | 3.51 [3.50, 3.52] | 5.16 [5.15, 5.17] |
 | 32 | 3.71 [3.70, 3.73] | 10.13 [10.11, 10.14] |
+
+## E1/E4 — validity on the boundary-null instance (every confirmation is false)
+
+| method | false / runs | P(false confirmation) [95% Wilson] | <= eps = 0.05? |
+|---|---|---|---|
+| FRESCO (cooperative), W=1 | 5/400 | 0.013 [0.005, 0.029] | yes |
+| FRESCO (cooperative), W=8 | 2/400 | 0.005 [0.001, 0.018] | yes |
+| FRESCO (cooperative), W=32 | 1/400 | 0.003 [0.000, 0.014] | yes |
+| independent eps/W, W=8 | 2/400 | 0.005 [0.001, 0.018] | yes |
+| independent eps/W, W=32 | 0/400 | 0.000 [0.000, 0.010] | yes |
+| centralized scheduler, W=8 | 9/400 | 0.022 [0.012, 0.042] | yes |
+| centralized scheduler, W=32 | 6/400 | 0.015 [0.007, 0.032] | yes |
+| Algorithm 1 (manuscript: Wilson, eps/T) | 513/2000 | 0.257 [0.238, 0.276] | **NO** |
+| Algorithm 1 repaired (Clopper-Pearson, eps/KT) | 69/2000 | 0.035 [0.027, 0.043] | yes |
+| LEXIS, matched budget | 37/2000 | 0.018 [0.013, 0.025] | yes |
+| LEXIS, 30k budget | 21/2000 | 0.011 [0.007, 0.016] | yes |
+
+## E4 — efficiency: LEXIS vs Algorithm 1 (slot level, single process)
+
+k* = 3 in both instances. 'Reach k*' means b_hat = 3 exactly. Algorithm 1 is a single pass (at most 1,160 slots); 'LEXIS, matched' has the same 1,160-slot budget.
+
+Exploratory cap-30 LEXIS on the boundary null: false confirmations 64/4000 = 0.016 [0.013, 0.020].
+
+| instance | method | runs | P(reach k*) | median slots (reached runs) | P(b_hat > k*) |
+|---|---|---|---|---|---|
+| S1-moderate | alg1:cp-KT | 2000 | 0.800 [0.782, 0.817] | 810 | 0.187 |
+| S1-moderate | alg1:wilson-T | 2000 | 0.803 [0.785, 0.820] | 810 | 0.152 |
+| S1-moderate | lexis:matched | 2000 | 0.246 [0.228, 0.266] | 552 | 0.285 |
+| S1-moderate | lexis:matched:cap30 (exploratory, post hoc) | 2000 | 0.296 [0.277, 0.317] | 440 | 0.338 |
+| S1-moderate | lexis:open | 2000 | 0.998 [0.994, 0.999] | 2,993 | 0.001 |
+| S1-moderate | lexis:open:cap30 (exploratory, post hoc) | 2000 | 0.981 [0.974, 0.986] | 2,293 | 0.017 |
+| S2-sparse | alg1:cp-KT | 2000 | 0.272 [0.252, 0.291] | 810 | 0.594 |
+| S2-sparse | alg1:wilson-T | 2000 | 0.280 [0.261, 0.300] | 810 | 0.561 |
+| S2-sparse | lexis:matched | 2000 | 0.043 [0.035, 0.053] | 544 | 0.221 |
+| S2-sparse | lexis:matched:cap30 (exploratory, post hoc) | 2000 | 0.071 [0.061, 0.083] | 496 | 0.274 |
+| S2-sparse | lexis:open | 2000 | 0.782 [0.764, 0.800] | 10,011 | 0.214 |
+| S2-sparse | lexis:open:cap30 (exploratory, post hoc) | 2000 | 0.541 [0.519, 0.563] | 7,462 | 0.433 |
+
+## E5 — ablations and sensitivity (W = 8 unless stated, S1-moderate)
+
+| variant | runs | P(reach k*) | RMST time (s) | mean calls | RMST ratio vs default | false conf. |
+|---|---|---|---|---|---|---|
+| default (poly lease R=8, m=2, pool=2, audit 0.1, cap 60) | 80 | 1.00 [0.95, 1.00] | 4,074 [3,218, 4,978] | 6,069 [4,800, 7,410] | 1.00 [0.74, 1.35] | 1 |
+| lease policy: fraction 1/16 (Stage 3) | 80 | 1.00 [0.95, 1.00] | 3,470 [2,814, 4,163] | 5,160 [4,195, 6,183] | 0.85 [0.63, 1.15] | 0 |
+| lease policy: fraction 1/16, W=32 | 80 | 1.00 [0.95, 1.00] | 1,672 [1,377, 1,982] | 9,261 [7,636, 10,969] | 0.41 [0.31, 0.56] | 0 |
+| default, W=32 | 80 | 1.00 [0.95, 1.00] | 966 [784, 1,183] | 5,828 [4,746, 7,112] | 0.24 [0.18, 0.33] | 0 |
+| lease size R=2 | 80 | 1.00 [0.95, 1.00] | 3,442 [2,734, 4,174] | 5,129 [4,081, 6,214] | 0.84 [0.63, 1.14] | 0 |
+| lease size R=32 | 80 | 1.00 [0.95, 1.00] | 3,650 [2,870, 4,548] | 5,441 [4,282, 6,777] | 0.90 [0.65, 1.22] | 0 |
+| in-flight m=1 | 80 | 1.00 [0.95, 1.00] | 5,103 [4,138, 6,138] | 7,226 [5,864, 8,689] | 1.25 [0.94, 1.69] | 0 |
+| in-flight m=4 (executors 4) | 80 | 1.00 [0.95, 1.00] | 2,893 [2,239, 3,604] | 4,311 [3,345, 5,368] | 0.71 [0.52, 0.98] | 0 |
+| pool=1 | 80 | 1.00 [0.95, 1.00] | 5,343 [4,283, 6,500] | 7,553 [6,060, 9,180] | 1.31 [0.98, 1.77] | 0 |
+| pool=8 | 80 | 1.00 [0.95, 1.00] | 3,780 [3,054, 4,562] | 5,627 [4,550, 6,782] | 0.93 [0.70, 1.25] | 0 |
+| audit share 0 | 80 | 1.00 [0.95, 1.00] | 2,414 [1,929, 2,956] | 3,582 [2,863, 4,382] | 0.59 [0.44, 0.82] | 0 |
+| audit share 0.3 | 80 | 1.00 [0.95, 1.00] | 6,036 [4,828, 7,382] | 9,029 [7,233, 11,036] | 1.48 [1.10, 2.01] | 0 |
+| cap 30 | 80 | 1.00 [0.95, 1.00] | 2,800 [2,132, 3,570] | 4,170 [3,182, 5,312] | 0.69 [0.49, 0.96] | 0 |
+| cap 120 | 80 | 1.00 [0.95, 1.00] | 6,824 [5,258, 8,434] | 10,171 [7,840, 12,573] | 1.67 [1.20, 2.29] | 0 |
+| cheap-first level weights | 80 | 1.00 [0.95, 1.00] | 8,657 [6,699, 10,870] | 12,869 [9,962, 16,158] | 2.12 [1.53, 2.97] | 0 |
+| executor crash 0.2, async (crash -> Y=0) | 80 | 1.00 [0.95, 1.00] | 6,878 [4,999, 9,196] | 10,221 [7,432, 13,654] | 1.69 [1.17, 2.45] | 0 |
+| executor crash 0.2, replay (same key) | 80 | 1.00 [0.95, 1.00] | 4,944 [3,982, 5,911] | 7,354 [5,927, 8,786] | 1.21 [0.91, 1.63] | 1 |
+
+## E6 — fault recovery (W = 8, 20 s buckets)
+
+| variant | seeds | pre-fault calls/s | recovery to 90% after fault end (s) | calls lost in [1000, 2000) s |
+|---|---|---|---|---|
+| no fault | 30 | 1.49 | — | 19 |
+| ledger crash (60 s down) | 30 | 1.49 | 10 | 114 |
+| 4 of 8 workers crash (120 s down) | 30 | 1.49 | 10 | 108 |
+| 4 of 8 workers partitioned (300 s) | 30 | 1.49 | 10 | 238 |
+
+## E7 — certificate calibration (G2)
+
+Levels 1-2 contain rare violators (mu = 0.003, 0.01; p = 0.3 > alpha), levels 3-4 none. Coverage requires eta_k >= mu_k at every level simultaneously; target >= 1 - eps_audit = 0.95.
+
+| variant | runs | coverage | median eta_1 (mu=.003) | eta_2 (mu=.01) | eta_3 (mu=0) | eta_4 (mu=0) |
+|---|---|---|---|---|---|---|
+| r=3, t=1, certify p>=0.2 | 200 | 1.000 [0.981, 1.000] | 0.748 (N≈280) | 0.738 (N≈284) | 0.733 (N≈280) | 0.738 (N≈280) |
+| r=10, t=4, certify p>=0.3 | 200 | 1.000 [0.981, 1.000] | 0.392 (N≈100) | 0.400 (N≈102) | 0.385 (N≈102) | 0.392 (N≈101) |

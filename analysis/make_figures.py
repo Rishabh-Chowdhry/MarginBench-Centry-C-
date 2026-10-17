@@ -19,6 +19,7 @@ import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.ticker  # noqa: E402
 
 from analysis.stats import (bootstrap_ci, bootstrap_ratio_ci, censor, holm, kaplan_meier,  # noqa: E402
                             mann_whitney, wilson)
@@ -303,7 +304,12 @@ def validity():
     ax.set_yticks(range(len(items))); ax.set_yticklabels([n for n, _, _ in items], fontsize=8)
     ax.invert_yaxis(); ax.set_xlabel("P(any false confirmation), 95% Wilson interval")
     ax.set_xlim(0, max(0.35, max(wilson(k, t)[2] for _, k, t in items) + 0.05))
-    ax.set_title("Fig. 6  Validity: false-confirmation probability at the boundary null", loc="left")
+    from matplotlib.lines import Line2D
+    ax.legend(handles=[Line2D([], [], color=SERIES[0], **MK, label="interval reaches ε or below"),
+                       Line2D([], [], color=SERIES[1], **MK, label="interval entirely above ε (invalid)")],
+              loc="lower right", fontsize=8)
+    fig.suptitle("Fig. 6  Validity: false-confirmation probability at the boundary null",
+                 x=0.01, ha="left", fontsize=10, fontweight="bold")
     fig.tight_layout(); fig.savefig(FIG / "fig6_validity.png", dpi=200); plt.close(fig)
 
 
@@ -311,12 +317,19 @@ def e4_efficiency():
     if not have("e4_alg1"):
         return
     g = defaultdict(list)
-    for r in load("e4_alg1"):
+    rows_all = load("e4_alg1") + (load("e4b_lexis_cap30_exploratory") if have("e4b_lexis_cap30_exploratory") else [])
+    for r in rows_all:
         if r["instance"] != "null-boundary":
-            g[(r["instance"], r["method"])] += r["rows"]
+            label = r["method"] + (" (exploratory, post hoc)" if r["method"].endswith(":cap30") else "")
+            g[(r["instance"], label)] += r["rows"]
     md.append("## E4 — efficiency: LEXIS vs Algorithm 1 (slot level, single process)\n")
     md.append("k* = 3 in both instances. 'Reach k*' means b_hat = 3 exactly. Algorithm 1 is a single pass "
               "(at most 1,160 slots); 'LEXIS, matched' has the same 1,160-slot budget.\n")
+    if have("e4b_lexis_cap30_exploratory"):
+        nb = [x for r in load("e4b_lexis_cap30_exploratory") if r["instance"] == "null-boundary" for x in r["rows"]]
+        k = sum(int(x[2]) for x in nb)
+        md.append("Exploratory cap-30 LEXIS on the boundary null: false confirmations "
+                  "{}/{} = {:.3f} [{:.3f}, {:.3f}].\n".format(k, len(nb), *wilson(k, len(nb))))
     rows = []
     for (inst, m), v in sorted(g.items()):
         reach = [b == 3 for b, _, _ in v]
@@ -325,7 +338,7 @@ def e4_efficiency():
         rows.append([inst, m, len(v), "{:.3f} [{:.3f}, {:.3f}]".format(*p),
                      f"{np.median(slots_reach):,.0f}" if slots_reach else "—",
                      f"{np.mean([b is not None and b > 3 for b, _, _ in v]):.3f}"])
-    table(["instance", "method", "runs", "P(reach k*)", "median slots | reached", "P(b_hat > k*)"], rows)
+    table(["instance", "method", "runs", "P(reach k*)", "median slots (reached runs)", "P(b_hat > k*)"], rows)
 
 
 def e5():
@@ -354,8 +367,18 @@ def e5():
         ax.plot([v], [i], color=c, **MK)
     ax.axvline(1.0, color=INK, linewidth=1)
     ax.set_xscale("log"); ax.set_yticks(range(len(plot))); ax.set_yticklabels([p[0] for p in plot], fontsize=7.5)
-    ax.invert_yaxis(); ax.set_xlabel("RMST time ratio vs default (log; < 1 faster)")
-    ax.set_title("Fig. 8  Ablations: effect on time to reach k*", loc="left")
+    ticks = [0.25, 0.5, 1, 2, 4]
+    ax.xaxis.set_major_locator(matplotlib.ticker.FixedLocator(ticks))
+    ax.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+    ax.set_xticklabels([f"{t:g}×" for t in ticks])
+    ax.invert_yaxis(); ax.set_xlabel("RMST time ratio vs default (log scale; < 1 = faster)")
+    from matplotlib.lines import Line2D
+    ax.legend(handles=[Line2D([], [], color=SERIES[2], **MK, label="faster (CI below 1)"),
+                       Line2D([], [], color=SERIES[1], **MK, label="slower (CI above 1)"),
+                       Line2D([], [], color=INK2, **MK, label="no detected difference")],
+              loc="lower right", fontsize=7.5)
+    fig.suptitle("Fig. 8  Ablations: effect on time to reach k* (W = 8, S1)", x=0.01, ha="left",
+                 fontsize=10, fontweight="bold")
     fig.tight_layout(); fig.savefig(FIG / "fig8_ablations.png", dpi=200); plt.close(fig)
 
 

@@ -9,7 +9,7 @@ distributed-systems contribution.
 | 1 | Novelty investigation, three candidate directions, selection | [`docs/stage1_novelty_and_directions.md`](docs/stage1_novelty_and_directions.md) |
 | 2 | Mathematical framework and algorithm (LEXIS core, FRESCO protocol) | [`docs/stage2_framework_and_algorithm.md`](docs/stage2_framework_and_algorithm.md) |
 | 3 | Distributed architecture, protocol, implementation plan | [`docs/stage3_architecture_and_implementation.md`](docs/stage3_architecture_and_implementation.md) |
-| 4 | Simulator, experiment scripts, benchmark design, validation | not started |
+| 4 | Simulator, experiment scripts, benchmark design, validation | [`docs/stage4_experiments_and_validation.md`](docs/stage4_experiments_and_validation.md) |
 | 5 | Manuscript (only after evidence exists) | not started |
 
 Code:
@@ -30,5 +30,9 @@ python3 -I sims/stage1_counterexamples.py
 python3 -I sims/stage2_checks.py            # ~1.5 min
 python3 -I sims/stage3_fault_injection.py   # ~12 min on 4 cores (400 runs per config)
 ```
+
+Stage 4 experiments (synthetic): `experiments/run_all.sh` reruns E1-E7 and the Stage 3
+fault injection (~1.5-2 h on 4 cores) and regenerates `results/processed/summary.md` and
+`figures/` via `analysis/make_figures.py`.
 
 No result in this repository is an empirical finding about real agents.

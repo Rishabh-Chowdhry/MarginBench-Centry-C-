@@ -2,7 +2,7 @@
 (single process, no distribution), on (a) a boundary-null instance for
 validity and (b) the S1/S2 reservoirs for efficiency.
 
-Run: python3 -I experiments/e4_alg1.py [reps]   (default 2000)
+Run: python3 -I experiments/e4_alg1.py [reps] [--exploratory]   (default 2000)
 """
 
 import pathlib
@@ -46,8 +46,9 @@ def job(args):
             r = run_alg1(res, Alg1Config(rule=method.split(":")[1]), rng)
             out.append((r["b_hat"], r["slots"], r["false"]))
         else:
-            budget = ALG1_BUDGET if method == "lexis:matched" else 30000
-            cfg = LexisConfig(alpha=ALPHA, budget=budget, audit_share=0.0, stop_at_level=3)
+            budget = ALG1_BUDGET if method.startswith("lexis:matched") else 30000
+            cap = 30 if method.endswith(":cap30") else 60
+            cfg = LexisConfig(alpha=ALPHA, budget=budget, audit_share=0.0, stop_at_level=3, cap=cap)
             rep = run_lexis(res, cfg, rng)
             false = any(p <= ALPHA for _, p, _ in rep.confirmations)
             b = None if rep.b_hat == float("inf") else rep.b_hat
@@ -61,14 +62,18 @@ def wrapped(cfg):
 
 def main():
     reps = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
+    exploratory = "--exploratory" in sys.argv
     chunks = 20
     jobs = []
+    methods = (("lexis:matched:cap30", "lexis:open:cap30") if exploratory
+               else ("alg1:wilson-T", "alg1:cp-KT", "lexis:matched", "lexis:open"))
     for inst in INSTANCES:
-        for method in ("alg1:wilson-T", "alg1:cp-KT", "lexis:matched", "lexis:open"):
+        for method in methods:
             for c in range(chunks):
                 jobs.append((wrapped, {"instance": inst, "method": method, "chunk": c},
                              (inst, method, c, reps // chunks)))
-    run_jobs("e4_alg1", jobs)
+    # exploratory (not preregistered): post-hoc cap 30, the best cap in ablation E5
+    run_jobs("e4b_lexis_cap30_exploratory" if exploratory else "e4_alg1", jobs)
 
 
 if __name__ == "__main__":

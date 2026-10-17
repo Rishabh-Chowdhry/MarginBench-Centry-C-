@@ -20,8 +20,17 @@ def zero_failure_upper(n, beta):
     return 1.0 - beta ** (1.0 / n)
 
 
-def mass_bound(q_upper, alpha, r):
-    return min(1.0, q_upper / (1.0 - (1.0 - alpha) ** r))
+def binom_tail(r, p, t):
+    """P(Binomial(r, p) >= t)."""
+    return sum(math.comb(r, i) * p ** i * (1 - p) ** (r - i) for i in range(t, r + 1))
+
+
+def mass_bound(q_upper, alpha, r, t=1):
+    """Bound on mu = D{delta: p(delta) >= alpha} from an upper bound on q = P(Z = 1),
+    where Z = 1{at least t of r runs violate}. Because the binomial tail is
+    increasing in p, every draw with p >= alpha has P(Z = 1) >= P(Bin(r, alpha) >= t),
+    so q >= mu * binom_tail(r, alpha, t). t = 1 recovers 1 - (1 - alpha)^r."""
+    return min(1.0, q_upper / binom_tail(r, alpha, t))
 
 
 class BernoulliUpperCS:

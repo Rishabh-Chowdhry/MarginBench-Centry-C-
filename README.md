@@ -8,22 +8,27 @@ distributed-systems contribution.
 |---|---|---|
 | 1 | Novelty investigation, three candidate directions, selection | [`docs/stage1_novelty_and_directions.md`](docs/stage1_novelty_and_directions.md) |
 | 2 | Mathematical framework and algorithm (LEXIS core, FRESCO protocol) | [`docs/stage2_framework_and_algorithm.md`](docs/stage2_framework_and_algorithm.md) |
-| 3 | Distributed architecture, protocol, implementation plan | not started |
+| 3 | Distributed architecture, protocol, implementation plan | [`docs/stage3_architecture_and_implementation.md`](docs/stage3_architecture_and_implementation.md) |
 | 4 | Simulator, experiment scripts, benchmark design, validation | not started |
 | 5 | Manuscript (only after evidence exists) | not started |
 
 Code:
 
 - `fresco/` — executable specification of the LEXIS statistical core (betting
-  e-process, error-budget ledger, anytime certificates, single-process LEXIS).
+  e-process, error-budget ledger, anytime certificates, single-process LEXIS),
+  the FRESCO ledger state machine and protocol messages (`ledger.py`,
+  `messages.py`), and a deterministic fault-injection simulator (`fresco/sim/`).
+- `deploy/postgres_schema.sql` — production ledger schema (specification; not yet executed).
 - `tests/` — unit tests: `python3 -m pytest -q tests` (needs numpy, pytest).
-- `sims/stage1_counterexamples.py`, `sims/stage2_checks.py` — synthetic Monte Carlo
-  checks (Bernoulli oracles, no LLM) of the Stage 1 counterexamples and the Stage 2
-  propositions. Outputs are committed next to each script (`*.out.txt`).
+- `sims/stage1_counterexamples.py`, `sims/stage2_checks.py`, `sims/stage3_fault_injection.py`
+  — synthetic Monte Carlo checks (no LLM) of the Stage 1 counterexamples, the Stage 2
+  propositions, and system-level fault injection through the implemented protocol.
+  Outputs are committed next to each script (`*.out.txt`).
 
 ```
 python3 -I sims/stage1_counterexamples.py
 python3 -I sims/stage2_checks.py            # ~1.5 min
+python3 -I sims/stage3_fault_injection.py   # ~12 min on 4 cores (400 runs per config)
 ```
 
 No result in this repository is an empirical finding about real agents.

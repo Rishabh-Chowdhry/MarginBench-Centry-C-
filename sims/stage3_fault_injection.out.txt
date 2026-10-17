@@ -1,0 +1,16 @@
+eps=0.05, runs per config=400, scenario: all candidates null at p = alpha = 0.2
+configuration                                                  P(false conf.)      95% Wilson CI  mean slots
+clean / FRESCO                                                          0.022  [0.012, 0.042]        2988  OK
+all faults combined / FRESCO                                            0.015  [0.007, 0.032]        2993  OK
+R3 dedup (net duplicate 0.3) / FRESCO                                   0.015  [0.007, 0.032]        2993  OK
+R3 dedup (net duplicate 0.3) / without rule                             0.142  [0.112, 0.180]        2906
+R4 no fresh retry (crash 0.3/0.1) / FRESCO                              0.007  [0.003, 0.022]        2993  OK
+R4 no fresh retry (crash 0.3/0.1) / without rule                        0.165  [0.132, 0.205]        2867
+R3 in-order (violations 6x faster, 8 in flight) / FRESCO                0.022  [0.012, 0.042]        2989  OK
+R3 in-order (violations 6x faster, 8 in flight) / without rule          0.125  [0.096, 0.161]        2906
+R5 global budget (W=8) / FRESCO                                         0.022  [0.012, 0.042]        5938  OK
+R5 global budget (W=8) / without rule                                   0.117  [0.090, 0.153]        5933
+
+real	12m7.590s
+user	46m58.324s
+sys	0m53.766s

@@ -1,0 +1,10 @@
+alpha=0.2 eps=0.05 lambda=1.0 slots=600 reps=20000 seed=20261017
+accounting rule                                  false-confirm   +/-95%
+exactly-once, slot-indexed (proposed)                0.0402   0.0027
+at-least-once, no dedup (dup prob 0.3)               0.1064   0.0043
+crash->fresh retry (applied p=0.243)                 0.2603   0.0061
+crash->Y=0, no retry (proposed)                      0.0150   0.0017
+worker-local level eps, W=2 (FWER)                   0.0730   0.0036
+worker-local level eps, W=8 (FWER)                   0.2702   0.0062
+worker-local level eps, W=32 (FWER)                  0.7219   0.0062
+escrowed eps/W, W=32 (FWER)                          0.0356   0.0026

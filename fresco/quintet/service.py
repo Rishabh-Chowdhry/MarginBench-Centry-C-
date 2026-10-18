@@ -99,7 +99,9 @@ class Coordinator:
         self.store = DomainStore.load(role, self.path) if self.path.exists() else DomainStore(role)
         self.lock = threading.RLock()
         self.scan_lock = threading.Lock()         # one TWGR scan at a time (Archivist)
-        self.outbox = {d: queue.Queue() for d in DOMAINS}   # one queue per peer: no head-of-line blocking
+        # one data queue and one control queue per peer: nothing waits behind another peer,
+        # and copies never wait behind a control message (E12 defect D6)
+        self.outbox = {(d, q): queue.Queue() for d in DOMAINS for q in ("data", "ctl")}
         self.pending = 0
         self.slot_ttl = slot_ttl
         self.slot_time = {}                       # (j, k) -> lease time (recorder)
@@ -107,7 +109,8 @@ class Coordinator:
         self.recovering = self.path.exists() and self._damaged()
         self._rebuild()
         for d in DOMAINS:
-            threading.Thread(target=self._replicator, args=(d,), daemon=True).start()
+            for q in ("data", "ctl"):
+                threading.Thread(target=self._replicator, args=(d, q), daemon=True).start()
         if self.recovering:
             threading.Thread(target=self._request_repair, daemon=True).start()
         else:
@@ -180,6 +183,10 @@ class Coordinator:
     def _rebuild(self):
         """Counters come from records present locally and from the Archivist's anchor
         index, so a coordinator restarted with a damaged store never reuses an id."""
+        self.my_anchor = {}                       # id -> digests this domain anchored (verified links)
+        for i, dg, ok in self.store.anchor_entries():
+            if ok:
+                self.my_anchor.setdefault(i, set()).add(dg)
         ids = set(self.store.blobs) | {parse_id(i) for i, _, _ in self.store.anchor_entries() if ":" in i}
         if self.role != "archivist" and "archivist" in self.peers:
             try:
@@ -263,6 +270,7 @@ class Coordinator:
 
     def _anchor_local(self, nid, digest):
         with self.lock:
+            self.my_anchor.setdefault(nid_str(nid), set()).add(digest)
             self.store.append_anchor(nid, digest)
             self._persist({"log": self.store.log[-1]})
 
@@ -284,14 +292,19 @@ class Coordinator:
     def _enqueue(self, role, path, body):
         with self.lock:
             self.pending += 1
-        self.outbox[role].put((path, body))
+        q = "data" if path in ("/store", "/anchor") else "ctl"
+        self.outbox[(role, q)].put((path, body))
 
-    def _replicator(self, role):
-        """Deliver until accepted; a 5xx or an unreachable peer is retried with backoff."""
+    def _replicator(self, role, q):
+        """Deliver until accepted; a 5xx or an unreachable peer is retried with backoff.
+        Data (copies, anchors) is retried until delivered. A control message (e.g. an
+        arbitration trigger) is idempotent and re-triggered by workers, so it is dropped
+        after a bounded number of attempts."""
         while True:
-            path, body = self.outbox[role].get()
-            delay = 0.1
-            while True:
+            path, body = self.outbox[(role, q)].get()
+            delay, attempts = 0.1, 0
+            while q == "data" or attempts < 8:
+                attempts += 1
                 try:
                     if call(self.peers[role], path, body, timeout=3).get("_code", 200) < 500:
                         break
@@ -303,13 +316,23 @@ class Coordinator:
                 self.pending -= 1
 
     # ------------------------------------------------------------ peer reads
+    def verified(self, nid):
+        """The local copy of nid only if it matches a digest this domain anchored when it
+        stored it; damaged or tampered copies are never served or used (E12 defect D6)."""
+        b = self.store.blobs.get(nid)
+        if b is None:
+            return None
+        try:
+            n = Node.decode(b)
+        except ValueError:
+            return None
+        return n if n.id == nid and n.digest() in self.my_anchor.get(nid_str(nid), ()) else None
+
     def fetch(self, nid):
-        """A record from its owner, falling back to witnesses (verified later by TWGR)."""
-        if nid in self.store.blobs:
-            try:
-                return Node.decode(self.store.blobs[nid])
-            except ValueError:
-                pass
+        """A record from this domain or its owner/witnesses, anchor-verified at the source."""
+        n = self.verified(nid)
+        if n is not None:
+            return n
         owner = TYPE_OWNER[nid[0]]
         for d in [owner] + witnesses(nid, owner):
             if d == self.role:
@@ -517,8 +540,14 @@ class Coordinator:
     def op_results(self, body):
         j = body["j"]
         out, k = [], 1
-        while ("Result", f"{j}:{k}") in self.store.blobs:
-            out.append(b64(self.store.blobs[("Result", f"{j}:{k}")]))
+        while ("Result", f"{j}:{k}") in self.store.blobs:   # in-order prefix of intact results only:
+            b = self.store.blobs[("Result", f"{j}:{k}")]    # a damaged one is a gap (E12 defect D6)
+            try:                                            # verified = matches our write-time anchor
+                if Node.decode(b).digest() not in self.my_anchor.get(f"Result:{j}:{k}", ()):
+                    break
+            except ValueError:
+                break
+            out.append(b64(b))
             k += 1
         return 200, {"results": out}
 
@@ -534,7 +563,10 @@ class Coordinator:
             return 503, {"error": "recorder unavailable"}
         if cand is None or alloc is None:
             return 404, {"error": "unknown candidate"}
-        results = [Node.decode(unb64(r)) for r in rs]
+        try:
+            results = [Node.decode(unb64(r)) for r in rs]
+        except ValueError as e:
+            return 422, {"error": f"undecodable result: {e}"}
         n, _, _, ok = evaluate_confirmation(alloc, [r.payload.get("y") for r in results], self.p.alpha,
                                             self.p.cap, self.p.bet_cap)
         if not ok and n < self.p.cap:
@@ -558,13 +590,9 @@ class Coordinator:
 
     def op_status(self, body):
         j = body["j"]
-        b = self.store.blobs.get(("Confirmation", j))
-        if b is not None:
-            try:
-                return 200, {"status": "CONFIRMED" if Node.decode(b).payload["confirmed"] else "CAPPED",
-                             "b_hat": self.b_hat}
-            except ValueError:
-                pass
+        n = self.verified(("Confirmation", j))
+        if n is not None:
+            return 200, {"status": "CONFIRMED" if n.payload.get("confirmed") else "CAPPED", "b_hat": self.b_hat}
         return 200, {"status": "ACTIVE", "b_hat": self.b_hat}
 
     # Archivist
@@ -652,8 +680,8 @@ def make_handler(coord):
             if path == "/dump":
                 return self._send(200, coord._dump())
             if path == "/node":
-                b = coord.store.blobs.get(parse_id(q.get("id", ":")))
-                return self._send(200 if b is not None else 404, {"b": b64(b)} if b is not None else {})
+                n = coord.verified(parse_id(q.get("id", ":")))
+                return self._send(200 if n is not None else 404, {"b": b64(n.encode())} if n is not None else {})
             if path == "/anchored":
                 i = q.get("id", "")
                 return self._send(200, {"anchored": any(e[0] == i for e in coord.store.anchor_entries())})

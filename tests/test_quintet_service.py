@@ -143,3 +143,21 @@ def test_counters_never_reuse_ids_of_surviving_neighbours(cluster, tmp_path):
     finally:
         c.store, c.peers = saved, saved_peers
         c._rebuild()
+
+
+def test_results_serve_only_anchor_verified_copies(cluster):
+    """Regression for E12 defect D6: a tampered-but-decodable local Result must never be
+    served to the Arbiter as evidence; the prefix stops at it."""
+    _, _, _, coords, _ = cluster
+    from fresco.hkg.corrupt import tamper_node
+    from fresco.hkg.graph import Node
+    rec = coords["recorder"]
+    nid = next(i for i, b in rec.store.blobs.items() if i[0] == "Result" and i[1].endswith(":1"))
+    j = nid[1].split(":")[0]
+    good = rec.store.blobs[nid]
+    rec.store.blobs[nid] = tamper_node(Node.decode(good)).encode()
+    try:
+        assert rec.op_results({"j": j})[1]["results"] == []
+    finally:
+        rec.store.blobs[nid] = good
+    assert len(rec.op_results({"j": j})[1]["results"]) >= 1

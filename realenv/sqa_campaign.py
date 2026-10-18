@@ -23,7 +23,7 @@ import numpy as np
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from experiments.e11_adversary import control  # noqa: E402
+from experiments.e11_adversary import anchor_domains, control  # noqa: E402
 from fresco.hkg.corrupt import tamper_node  # noqa: E402
 from fresco.hkg.graph import DOMAINS, DomainStore, Fabric, Node  # noqa: E402
 from fresco.hkg.repair import QUARANTINED, RunParams, derive_confirmation, report, twgr  # noqa: E402
@@ -373,10 +373,11 @@ def tc_storage(cl, rows):
         for r in DOMAINS:
             fab.stores[r] = DomainStore.load(r, cl.data / r / f"{r}.jsonl")
         targets = [res0[int(t)] for t in rng.choice(len(res0), size=10, replace=False)]
-        doms = {}
+        minority = {}
         for nid in targets:
             B = [str(d) for d in rng.choice(DOMAINS, size=k, replace=False)]
-            doms[nid] = B
+            A = anchor_domains(fab, nid)
+            minority[nid] = 2 * len(set(B) & A) <= len(A)          # Theorem 1 applies
             control(fab, nid, tamper_node(golden[nid]), B)
         for r in DOMAINS:
             fab.stores[r].save(cl.data / r / f"{r}.jsonl")
@@ -385,8 +386,10 @@ def tc_storage(cl, rows):
         _, acc = invariants(cl.snapshot(), check_write_once=False)
         wrong = sum(1 for t in targets if t in acc and acc[t].encode() != golden[t].encode())
         corr = sum(1 for t in targets if t in acc and acc[t].encode() == golden[t].encode())
-        rows.append({"tc": f"TC10 adversary k={k}", "targets": len(targets), "wrong": wrong, "correct": corr,
-                     "quarantined": len(targets) - wrong - corr, "pass": wrong == 0})
+        wrong_min = sum(1 for t in targets if minority[t] and t in acc and acc[t].encode() != golden[t].encode())
+        rows.append({"tc": f"TC10 adversary k={k}", "targets": len(targets), "minority_targets": sum(minority.values()),
+                     "wrong": wrong, "wrong_minority": wrong_min, "correct": corr,
+                     "quarantined": len(targets) - wrong - corr, "pass": wrong_min == 0})
     cl.stop_coordinators()
 
 

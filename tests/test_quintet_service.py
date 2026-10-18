@@ -106,5 +106,21 @@ def test_restarted_recorder_never_fabricates_crash_results(cluster):
     with rec.lock:
         rec.slot_time[(j, int(k))] = 0.0
     time.sleep(2.5)
-    assert nid not in rec.store.blobs and len(rec.store.log) == n_log
+    assert rec.store.blobs.get(nid) in (None, true) and len(rec.store.log) == n_log   # absent or healed, never a crash
     rec.store.blobs[nid] = true
+
+
+def test_damaged_restart_waits_for_repair(cluster, tmp_path):
+    """Regression for E12 defect D4: a coordinator restarted on a damaged store must
+    refuse role operations until a TWGR scan has healed it."""
+    tmp, _, peers, _, _ = cluster
+    lines = (tmp / "arbiter" / "arbiter.jsonl").read_text().splitlines()
+    (tmp_path / "arbiter").mkdir()
+    (tmp_path / "arbiter" / "arbiter.jsonl").write_text("\n".join(lines[1:]) + "\n")   # first record lost
+    c = Coordinator("arbiter", tmp_path / "arbiter", {**peers, "archivist": "http://127.0.0.1:9"}, P,
+                    SCENARIOS["S1-dense"])
+    assert c.recovering
+    code, _ = c.op("/arbitrate", {"j": "1"})
+    assert code == 503
+    c.op("/recovered", {})
+    assert not c.recovering

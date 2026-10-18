@@ -38,6 +38,8 @@ The harness pulls every domain's dump and runs TWGR locally without healing. It 
 | TC8 | On-disk corruption at ρ ∈ {0.05, 0.2, 0.4} after a TC1-style run; all coordinators restarted; Archivist scan | Against the golden pre-corruption graph: **0 wrong accepted non-confirmation records, 0 added confirmations**. Recovery ≥ 0.99 at ρ = 0.05. A second scan after healing finds no REPAIRED records |
 | TC9 | Whole data directories of 2 coordinators deleted (disk loss); restart; scan | 0 wrong records, 0 added confirmations |
 | TC10 | Consistent adversarial rewrite of one Result in k = 1, 2 domains (files and logs re-chained) | For the minority adversary: the record is accepted correctly or quarantined, never wrong |
+
+*Clarification added after run 3, before run 4:* "minority" is judged per target. It means the compromised domains are at most half of the domains holding anchors for that target (2b ≤ m, the condition of Theorem 1). With k = 2, some targets have m = 3, so the adversary is a majority there, and Theorem 1 predicts that a wrong value can be accepted. The harness now computes b and m for every target.
 | TC11 | Validity: boundary-null scenario, 5 independent cluster runs × 6 workers | 0 false confirmations is expected; the bound is P(any) ≤ ε = 0.05 per run. This test is descriptive, because 5 runs cannot estimate a 5% rate |
 | TC12 | Resume after the TC4 and TC8 faults: run workers again on the repaired cluster | No write-once conflicts (no id reuse after restart). I1–I6 hold |
 

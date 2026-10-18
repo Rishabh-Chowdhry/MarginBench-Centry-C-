@@ -98,17 +98,73 @@ class Coordinator:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.store = DomainStore.load(role, self.path) if self.path.exists() else DomainStore(role)
         self.lock = threading.RLock()
+        self.scan_lock = threading.Lock()         # one TWGR scan at a time (Archivist)
         self.outbox = {d: queue.Queue() for d in DOMAINS}   # one queue per peer: no head-of-line blocking
         self.pending = 0
         self.slot_ttl = slot_ttl
         self.slot_time = {}                       # (j, k) -> lease time (recorder)
         self.repairs = 0
+        self.recovering = self.path.exists() and self._damaged()
         self._rebuild()
         for d in DOMAINS:
             threading.Thread(target=self._replicator, args=(d,), daemon=True).start()
-        self._resync()
+        if self.recovering:
+            threading.Thread(target=self._request_repair, daemon=True).start()
+        else:
+            self._resync()
         if role == "recorder":
             threading.Thread(target=self._expirer, daemon=True).start()
+
+    # ------------------------------------------------------------ repair before serve
+    def _damaged(self):
+        """Self-check after a restart: every file line parses, every anchor link
+        verifies, and every stored copy matches a digest this domain anchored for it.
+        Any failure means the store may hold damaged evidence, so the coordinator must
+        not act on it before a TWGR repair (E12 defect D4)."""
+        bad = 0
+        with open(self.path, "rb") as f:
+            for line in f:
+                try:
+                    d = json.loads(line)
+                    if "log" not in d:
+                        base64.b64decode(d["b"], validate=True)
+                except Exception:
+                    bad += 1
+        anchors = {}
+        for i, dg, ok in self.store.anchor_entries():
+            bad += not ok
+            anchors.setdefault(i, set()).add(dg)
+        bad += len(self.store.log) - len(self.store.anchor_entries())
+        if self.role != "archivist":             # here every anchor was written together with a copy
+            held = {nid_str(i) for i in self.store.blobs}
+            bad += sum(1 for i in anchors if i not in held)
+        for nid, b in self.store.blobs.items():
+            try:
+                n = Node.decode(b)
+                bad += n.id != nid or n.digest() not in anchors.get(nid_str(nid), ())
+            except ValueError:
+                bad += 1
+        return bad > 0
+
+    def _request_repair(self):
+        delay = 0.5
+        while self.recovering:
+            try:
+                call(self.peers["archivist"], "/scan", {}, timeout=600) if self.role != "archivist" else self.op_scan({})
+            except Unavailable:
+                pass
+            time.sleep(delay)
+            delay = min(10.0, delay * 2)
+
+    def op_recovered(self, body):
+        """Called by the Archivist after a scan healed this domain."""
+        with self.lock:
+            was = self.recovering
+            self.recovering = False
+            self._rebuild()
+        if was:
+            self._resync()
+        return 200, {}
 
     # ------------------------------------------------------------ state rebuild
     def _nodes(self, t):
@@ -270,9 +326,12 @@ class Coordinator:
 
     # ------------------------------------------------------------ role operations
     def op(self, path, body):
-        h = getattr(self, "op_" + path.strip("/").replace("/", "_"), None)
+        name = path.strip("/").replace("/", "_")
+        h = getattr(self, "op_" + name, None)
         if h is None:
             return 404, {"error": "unknown operation"}
+        if self.recovering and name not in ("store", "anchor", "repair", "rebuild", "recovered", "scan"):
+            return 503, {"error": "recovering: waiting for TWGR repair"}
         return h(body)
 
     # common to all domains
@@ -507,6 +566,10 @@ class Coordinator:
 
     # Archivist
     def op_scan(self, body):
+        with self.scan_lock:
+            return self._scan()
+
+    def _scan(self):
         """Pull every domain, run TWGR, push healed copies back. Unreachable domains
         are treated as empty (their records rely on the other domains)."""
         fab = Fabric()
@@ -540,6 +603,12 @@ class Coordinator:
         counts = {}
         for s in status.values():
             counts[s] = counts.get(s, 0) + 1
+        for d in DOMAINS:                       # healed domains may serve again
+            if reach[d]:
+                try:
+                    self.op_recovered({}) if d == self.role else call(self.peers[d], "/recovered", {})
+                except Unavailable:
+                    pass
         rep = report(acc)
         accepted = {nid_str(i): n.digest() for i, n in acc.items()}
         return 200, {"status": counts, "report": rep, "healed_copies": pushed, "reachable": reach,
@@ -574,6 +643,7 @@ def make_handler(coord):
             q = dict(kv.split("=", 1) for kv in qs.split("&") if "=" in kv)
             if path == "/health":
                 return self._send(200, {"role": coord.role, "records": len(coord.store.blobs),
+                                        "recovering": coord.recovering,
                                         "log": len(coord.store.log), "pending": coord.pending,
                                         "repairs": coord.repairs, "b_hat": coord.b_hat})
             if path == "/dump":

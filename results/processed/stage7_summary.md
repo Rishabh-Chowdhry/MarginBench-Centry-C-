@@ -89,3 +89,31 @@ b = compromised domains among the m domains holding anchors for the target. Theo
 
 H7-adversary: TWGR wrong acceptances with a minority adversary = 0; with a majority = 990. **supported**
 
+## E12 — SQA campaign on Docker devices (real network, process and storage faults)
+
+| test case | observations | verdict |
+|---|---|---|
+| TC1 baseline | 724 slots, 10.5 s; 2254 records; b̂=4; crash results 0 | FAIL |
+| TC2 latency | 360 slots, 38.1 s; 1126 records; b̂=4; crash results 0 | PASS |
+| TC3 timeouts+resets | 723 slots, 41.1 s; 2642 records; b̂=3; crash results 131 | PASS |
+| TC4 kill recorder | 724 slots, 24.2 s; 2260 records; b̂=3; crash results 3 | PASS |
+| TC5 pause arbiter | 722 slots, 30.2 s; 2249 records; b̂=3; crash results 2 | PASS |
+| TC6 partition treasurer | 721 slots, 23.4 s; 2247 records; b̂=3; crash results 127 | PASS |
+| TC7 kill 2 workers | 1201 slots, 25.5 s; 3992 records; b̂=3; crash results 2 | PASS |
+| TC8-golden | 723 slots, 9.5 s; 2252 records; b̂=3; crash results 0 | PASS |
+| TC8 rho=0.05 | recovery 0.9996, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 1, VERIFIED 2251 | PASS |
+| TC8 rho=0.2 | recovery 0.9929, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 17, REPAIRED 1, VERIFIED 2234 | PASS |
+| TC12 resume after storage repair | 240 slots, 4.6 s; 3012 records; b̂=3; crash results 0 | PASS |
+| TC8 rho=0.4 | recovery 0.9374, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 137, VERIFIED 2114 | FAIL |
+| TC9 lose registrar+archivist | recovery 1.0000, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 86, REPAIRED 1459, VERIFIED 707 | PASS |
+| TC9 lose recorder+arbiter | recovery 0.9600, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 116, RECONSTRUCTED 3, REPAIRED 1771, VERIFIED 362 | PASS |
+| TC10 adversary k=1 | targets 10: correct 10, quarantined 0, wrong 0 | PASS |
+| TC10 adversary k=2 | targets 10: correct 6, quarantined 2, wrong 2 | PASS |
+| TC11 boundary-null run 1 | 904 slots, 15.3 s; 2784 records; b̂=None; crash results 0; false confirmations 0 | PASS |
+| TC11 boundary-null run 2 | 903 slots, 13.8 s; 2781 records; b̂=None; crash results 0; false confirmations 0 | PASS |
+| TC11 boundary-null run 3 | 905 slots, 15.5 s; 2787 records; b̂=None; crash results 0; false confirmations 0 | PASS |
+| TC11 boundary-null run 4 | 901 slots, 15.2 s; 2775 records; b̂=None; crash results 0; false confirmations 0 | PASS |
+| TC11 boundary-null run 5 | 903 slots, 15.7 s; 2781 records; b̂=None; crash results 0; false confirmations 0 | PASS |
+
+19/21 test cases passed.
+

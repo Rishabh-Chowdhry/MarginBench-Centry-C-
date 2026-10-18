@@ -264,7 +264,9 @@ def e12():
         if "scan1" in r:
             detail.append("scan " + ", ".join(f"{k} {v}" for k, v in sorted(r["scan1"].items())))
         if "wrong" in r:
-            detail.append(f"targets {r['targets']}: correct {r['correct']}, quarantined {r['quarantined']}, wrong {r['wrong']}")
+            detail.append(f"targets {r['targets']} ({r.get('minority_targets', '?')} with a minority adversary): correct "
+                          f"{r['correct']}, quarantined {r['quarantined']}, wrong {r['wrong']} "
+                          f"(of which under a minority adversary: {r.get('wrong_minority', '?')})")
         if "false_confirmations" in r:
             detail.append(f"false confirmations {r['false_confirmations']}")
         if "worker_conflict_responses" in r:

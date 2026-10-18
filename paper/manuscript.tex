@@ -74,9 +74,10 @@ This paper argues that \emph{execution semantics are part of the statistical pro
 \item[C3] \textbf{Audit and repair} of the MARGIN-Bench margin estimator, which as specified exceeds its nominal error five-fold; an exact repair restores validity at no efficiency cost.
 \item[C4] \textbf{Cost of the rules.} A reference implementation (a single-ledger protocol) and a fault-injection evaluation showing near-linear scaling, small coordination cost and fast recovery.
 \item[C5] \textbf{Estimator guidance} from preregistered comparisons: a repaired fixed design is the most powerful at a fixed budget; anytime-valid confirmation buys flexible stopping at a 2--5 point power cost; a shared coordinator is unnecessary for speed.
+\item[C6] \textbf{Evidence that survives storage corruption} (Section~\ref{sec:quintet}). QUINTET splits the coordinator into five services with disjoint write responsibilities, and stores all run data as a heterogeneous graph whose records carry each other's digests. TWGR, a new repair algorithm, recovers the graph from corrupted storage. We prove it never fabricates a record while honest anchor domains outnumber corrupted ones (a tight bound) and never adds a confirmation, so validity survives repair. It accepted no wrong record in 640 synthetic repairs at corruption rates up to 0.6. In a Docker deployment tested with real network, process and storage faults, the campaign found seven defects in the networked service, all fixed; the four integrity defects shared one cause.
 \end{enumerate}
 
-\paragraph{Non-claims.} We do not propose a new statistical test; the inferential results we rely on are standard. We claim no certified lower bound on the margin, no Byzantine tolerance, validity only when episodes share no hidden state, and no finding about real agents: all results are synthetic, and the real-agent protocol (Section~\ref{sec:real}) is specified but not executed.
+\paragraph{Non-claims.} We do not propose a new statistical test; the inferential results we rely on are standard. We claim no certified lower bound on the margin, no tolerance of Byzantine executors (storage faults and a minority of compromised coordinator domains are tolerated; Section~\ref{sec:quintet}), and validity only when episodes share no hidden state. Validity and recovery results rest on synthetic ground truth. The real-environment results test the implementation, and the real-agent measurements (Section~\ref{sec:real}) are small and descriptive.
 
 % -----------------------------------------------------------------------------
 \section{Setting}\label{sec:setting}
@@ -212,6 +213,96 @@ The rules can be met in several ways; any harness that satisfies Table~\ref{tab:
 A shared ledger is not the only way to satisfy R5: $W$ independent single-worker deployments with budget $\varepsilon/W$ each also comply. Section~\ref{sec:results} compares the two. Production deployments need no message broker, cache or custom consensus---a broker would add an at-least-once hop that must then be deduplicated---and task frameworks may place executors only with automatic retries disabled, since those retries implement the fresh-retry default.
 
 % -----------------------------------------------------------------------------
+\section{Five coordinators and a self-repairing evidence graph}\label{sec:quintet}
+
+A single ledger is the simplest way to give every invariant one serialisation point, but it is one failure domain: if its storage is corrupted, nothing in the run can tell a true result from a damaged one. We therefore split the coordinator by \emph{responsibility}---not by data shard---into five services, store all run data as one heterogeneous graph whose records vouch for each other, and give a repair algorithm that recovers the graph from damaged storage without ever adding evidence.
+
+\paragraph{QUINTET.} Each record type has exactly one writer (Table~\ref{tab:quintet}). Everything one coordinator reads from another is write-once, so a value never changes after it is read; reads across coordinators need no distributed transaction, by the CALM argument applied to write-once data~\cite{hellerstein2020calm}. Each rule therefore keeps a single serialisation point, and the validity results of Section~\ref{sec:rules} apply unchanged (Proposition~\ref{prop:quintet}). The five services are also five independent failure domains, and the repair algorithm draws on exactly that independence.
+
+\begin{table}[!htbp]\centering\small
+\caption{QUINTET coordinators. Each is the single writer of its record types.}\label{tab:quintet}
+\begin{tabularx}{\linewidth}{lXl}
+\toprule
+Coordinator & Owns (single writer) & Rules \\\midrule
+Registrar & Candidate; Key (slot randomness $\mathrm{PRF}_\kappa(j,k)$, revealed on lease) & R1 \\
+Treasurer & Lease ($\varepsilon/(n(n+1))$), Grant, Allocation ($a_j$; one per lease slot) & R5 \\
+Recorder & SlotLease (fencing token), Result (write-once; expiry $\Rightarrow$ crash) & R3, R4 \\
+Arbiter & Confirmation (e-process on the in-order prefix), Frontier ($\bhat$) & R2, R6 \\
+Archivist & anchor index over all records; integrity scans; TWGR repair & --- \\
+\bottomrule\end{tabularx}
+\end{table}
+
+\paragraph{The evidence graph.} All run data form a typed graph with nine node types (Lease, Grant, Candidate, Allocation, SlotLease, Key, Result, Confirmation, Frontier). Every typed edge stores the digest of its target: a Result points to its Candidate, Key and SlotLease; a Confirmation points to its Allocation, its Candidate and every Result it consumed. A record is stored as bytes at its owner and at two witness domains chosen by hashing its id. Its digest is appended to hash-chained anchor logs at the owner, at both witnesses (a receipt) and at the Archivist. A record $x$ thus has three kinds of evidence:
+\begin{itemize}
+\item \emph{copies}, the stored bytes;
+\item \emph{anchors}, the digests committed at write time in logs and in the edges of records that reference $x$;
+\item \emph{derivations}, recomputations of $x$ from records of other types, where the derivation is a pure function. A Lease is derived from its index, an Allocation from its Candidate and Lease, a Key from the run key, and a Confirmation from its Allocation and Results.
+\end{itemize}
+
+\begin{algorithm}[!htbp]
+\caption{TWGR (typed-witness graph repair).}\label{alg:twgr}
+\begin{algorithmic}[1]
+\Require domain stores; run parameters (budget policy, run key, $\alpha$, cap)
+\State index edge anchors and the anchor-log entries whose hash link verifies
+\State $I\gets$ ids with an intact copy or attested by $\ge 2$ domains \Comment{no phantom records}
+\For{type $t$ in Lease, Grant, Candidate, Allocation, SlotLease, Key, Result, Confirmation, Frontier}
+ \For{$x\in I$ of type $t$}
+  \State $C\gets$ decodable, id-consistent copies of $x$; $\;D\gets$ derivation of $x$ from accepted records, if any
+  \State each domain votes the majority digest among \emph{its anchors} (copies never vote; abstain on ties)
+  \State $d^\star\gets$ plurality digest; anchored $\gets$ ($d^\star$ has a strict majority of votes and $\ge 2$ domains hold evidence for it)
+  \If{anchored and some $c\in C$ has digest $d^\star$} accept $c$, heal all copies \Comment{VERIFIED / REPAIRED}
+  \ElsIf{anchored and $\mathrm{digest}(D)=d^\star$} accept $D$, heal \Comment{RECONSTRUCTED}
+  \ElsIf{not anchored and $D$ exists} accept $D$ \Comment{exact: pure function of accepted inputs}
+  \Else\ quarantine $x$
+  \EndIf
+ \EndFor
+\EndFor
+\State re-derived Confirmations count quarantined Results as $Y=0$ and may be ``confirmed'' only if every consumed Result was accepted
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{TWGR.} Algorithm~\ref{alg:twgr} decides every record in type-dependency order, so derivations use only records already accepted. Records it cannot verify are \emph{quarantined}, and the consumer treats a quarantined record in the conservative direction (as R4 does for crashes):
+\begin{itemize}
+\item a quarantined Result counts as a crashed slot ($Y=0$ when confirming, $Z=1$ when auditing);
+\item a quarantined Lease counts as fully spent;
+\item a quarantined Allocation or Candidate is unconfirmable.
+\end{itemize}
+The parts are standard---digests, replication, hash chains, majority voting. Three things are new in their combination:
+\begin{itemize}
+\item votes are restricted to write-time commitments, counted once per failure domain;
+\item records are reconstructed exactly from other record types;
+\item quarantine is direction-aware, chosen per type so that repair can remove evidence but never add it.
+\end{itemize}
+
+Let $m(x)$ be the number of domains holding anchors for $x$, and $b(x)$ the number among them whose stored items concerning $x$ were modified after writing. Digests are 128-bit truncated SHA-256.
+
+\begin{theorem}[No fabrication]\label{thm:nofab}
+If $2b(y)<m(y)$ for $x$ and for every record $y$ that a derivation of $x$ depends on, then the record TWGR accepts for $x$ equals the record originally written. Under random corruption, the exception has probability at most $q^2 2^{-128}$ for $q$ stored items.
+\end{theorem}
+\begin{proof}
+Induction over the type order. An unmodified domain holds only anchors computed from the true $x$, so it votes $d(x)$. The true digest therefore receives at least $m-b$ votes, and any other digest at most $b<m-b$. An anchored acceptance therefore has $d^\star=d(x)$, and a copy or derivation with that digest equals $x$ by collision resistance. An unanchored acceptance is a derivation: a pure function of accepted inputs, which equal the truth by the induction hypothesis and which the writer used. Lease derivation depends only on public policy. Under random corruption, a wrong digest can win only if two corrupted items collide.
+\end{proof}
+
+The condition is tight. An adversary that controls a majority of a record's anchor domains, and writes one consistent wrong value into them, is accepted by any voting scheme. Experiment E11 confirms this boundary exactly. Plain replica-majority voting is weaker: two consistently tampered copies out of three suffice even when every anchor is honest.
+
+\begin{theorem}[Repair preserves validity]\label{thm:repair}
+Under the condition of Theorem~\ref{thm:nofab} for every record, the set of candidates confirmed in the repaired graph is a subset of those confirmed in the original run. Hence the false-confirmation probability after repair is at most that of the original run, which is at most $\varepsilon$ by Theorem~\ref{thm:seq}, and $\bhat$ can only increase.
+\end{theorem}
+\begin{proof}
+A confirmed record is accepted either as an anchored copy, which by Theorem~\ref{thm:nofab} is the Arbiter's original record, or as a re-derivation. A re-derivation may confirm only if every consumed Result was accepted; it then recomputes the Arbiter's e-process on inputs equal to the original ones and reaches the same decision. Without this guard, a corruption that removes chosen Results would feed the plug-in betting e-process, which is not monotone in individual outcomes, a sequence it never saw.
+\end{proof}
+
+\begin{proposition}[Recovery and cost]\label{prop:recovery}
+Record $x$ is recovered exactly if $2b(x)<m(x)$, at least two domains hold evidence for $d(x)$, and either one copy is intact or $x$ is derivable from recovered inputs. Under independent corruption with probability $\rho$ per stored item, a non-derivable record with $c$ copies fails with probability at most $\rho^{c}+\Pr(\mathrm{Bin}(m,\rho)\ge\lceil m/2\rceil)$. TWGR takes one pass in $O(S+E+J\cdot\mathrm{cap})$ time and $O(S+E)$ space for $S$ stored items, $E$ edges and $J$ candidates.
+\end{proposition}
+
+\begin{proposition}[QUINTET satisfies R1--R6]\label{prop:quintet}
+Each rule's state has exactly one writer (Table~\ref{tab:quintet}), and cross-coordinator reads touch only write-once records. Hence linearizable per-owner implementations compose without coordination, and Theorem~\ref{thm:seq} and Proposition~\ref{prop:fixed} apply to runs on QUINTET.
+\end{proposition}
+
+\paragraph{Implementation.} Each coordinator is an HTTP service (Python standard library) with an append-only JSON-lines store. Writes are durable locally first; copies, receipts and Archivist anchors are then replicated asynchronously, with one retry queue per peer. After a restart, a coordinator re-offers its records to their witnesses (an idempotent operation) and rebuilds its id counters from the Archivist's anchor index, so it never reuses an id. On request, the Archivist pulls every domain, runs TWGR and pushes healed copies back.
+
+% -----------------------------------------------------------------------------
 \section{Evaluation methodology}\label{sec:method}
 
 \paragraph{Why synthetic.} Validity claims need ground truth---which candidates are null and the true margin $k^*$---which real agents never provide. We use (a) a deterministic discrete-event simulator that runs the implemented ledger, message layer and workers with injected faults (loss, duplication, reordering, partitions, worker and executor crashes, ledger crash and journal recovery, outcome-correlated lognormal latency with means 20\,s benign and 30\,s violating) and Bernoulli oracles of known $p$; and (b) slot-level Monte Carlo of the confirmation procedures.
@@ -222,7 +313,7 @@ A shared ledger is not the only way to satisfy R5: $W$ independent single-worker
 
 % -----------------------------------------------------------------------------
 \section{Results}\label{sec:results}
-All results are synthetic.
+The results up to and including Section~\ref{sec:corruption} are synthetic, with known ground truth. Section~\ref{sec:sqa} tests the implementation on real infrastructure, and Section~\ref{sec:real} measures real agents.
 
 \subsection{The rules matter for both test families}
 Through the full system (400 seeds per cell, boundary null, sequential confirmation), removing deduplication raised the false-confirmation probability to 0.133 [0.103, 0.169], allowing fresh-key retry to 0.102 [0.076, 0.136], and consuming results in arrival order to 0.083 [0.059, 0.114]; with all rules it stayed between 0.003 and 0.018 in every fault configuration, including all faults combined (0.003 [0.000, 0.014]). A worker-local budget at $W=8$ gave 0.065 [0.045, 0.094], an inflation not established at this configuration. For fixed-sample confirmation (Table~\ref{tab:fixed}) the defaults were at least as harmful: using the first $n$ results to arrive broke validity almost surely (0.999), fresh retry gave 0.189, duplicates 0.111, and a worker-local budget at $W=8$ 0.266; with the rules the rate stayed at or below 0.035.
@@ -298,7 +389,99 @@ H6-noninf & LEXIS-S within 0.05 of repaired Algorithm 1 & \textbf{not supported}
 H6-cheaper & LEXIS-S uses fewer episodes & \textbf{refuted} (ratio $\approx1.00$) \\
 H-cert & certificate coverage $\ge0.95$ & supported; bounds loose \\
 H-valid-real & measured fault profiles imply inflation & \todo{TO RUN} \\
+H7-safe & TWGR accepts no wrong record, adds no confirmation (E10) & supported (0 in 640 repairs) \\
+H7-recover & recovery $\ge0.99$ at $\rho\le0.1$, $\ge0.90$ at $\rho=0.3$ & supported \\
+H7-ablate & every component contributes at $\rho=0.3$ & \textbf{not supported} (domain votes $\approx$ item votes) \\
+H7-baselines & replica-majority wrong; best-effort false confirmations $>\varepsilon$; single coordinator $\le0.5$ & supported \\
+H7-validity & no false confirmation after repair beyond $\varepsilon$ & supported (0/40 at every $\rho$) \\
+H7-adversary & wrong acceptance iff adversary holds a majority of anchor domains & supported (0/810 vs 990/990) \\
 \bottomrule\end{tabularx}
+\end{table}
+
+\subsection{Corruption tolerance of the evidence graph}\label{sec:corruption}
+\paragraph{Setup (E10).} We ran 80 QUINTET runs: 40 on S1-dense, with violating fractions $(0,0,0.3,0.5)$, and 40 on the boundary null. Each run held about 9{,}300 records. We then corrupted every stored item (record copies and anchor-log entries) independently with probability $\rho\in\{0,\dots,0.6\}$, using bit flips, truncation, deletion and format-valid semantic tampering: a Result set to violating, a Confirmation set to confirmed, budgets inflated. Ten variants repaired the identical corrupted stores (Fig.~\ref{fig:corruption}).
+
+\paragraph{Safety.} TWGR accepted no wrong record and added no confirmation in any of 640 repairs, including at $\rho=0.6$. After repair, no boundary-null run had a false confirmation (0/40 at every $\rho$), as Theorem~\ref{thm:repair} predicts. Every ablation was equally safe. The two usual alternatives were not:
+\begin{itemize}
+\item \emph{Replica-majority} voting accepted wrong records from $\rho=0.01$ on. It confirmed falsely in 6/40 boundary-null runs at $\rho=0.1$ and in 20/40 at $\rho=0.2$.
+\item \emph{Best-effort} recovery (take the owner's copy) confirmed falsely in 6/40 runs at $\rho=0.01$ and in 32/40 at $\rho=0.1$.
+\end{itemize}
+
+\paragraph{Recovery.} TWGR recovered 0.9993 of records with their exact original bytes at $\rho=0.1$, 0.979 at $\rho=0.3$ and 0.804 at $\rho=0.6$. A single coordinator with one copy and a checksum log is equally safe but cannot repair: it recovered 0.758, 0.394 and 0.097 at the same rates. At $\rho=0.3$, removing a component of TWGR lowered recovery as follows (paired, all 95\% CIs exclude 0):
+
+\begin{center}\small
+\begin{tabular}{lc}
+\toprule
+Removed component & Recovery lost at $\rho=0.3$ \\\midrule
+witness replicas & 0.215 \\
+edge anchors & 0.049 \\
+log anchors & 0.031 \\
+derivation & 0.010 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Counting votes per item rather than per domain made no difference under random corruption, so our preregistered claim that every component contributes was not supported. Per-domain voting matters only against an adversary.
+
+\paragraph{Domain loss and the adversary (E11).} Losing the data of one, two or three of the five domains left 1.000, 0.975 and 0.754 of records recovered, with no wrong record. Requiring support from at least two domains costs availability here: an exploratory variant that accepts support from one domain recovered 1.000, 1.000 and 0.910. Theorem~\ref{thm:nofab} does not need this requirement, but E11 did not test the variant. In 1{,}800 attacks, a coordinated adversary controlling $k$ domains wrote one consistent wrong value into every copy, log and edge it held.
+\begin{itemize}
+\item TWGR accepted the wrong value in 0 of 810 attacks where the adversary held at most half of the target's anchor domains, and in all 990 attacks where it held a strict majority. This is exactly the bound of Theorem~\ref{thm:nofab} and its tightness.
+\item Replica-majority voting was fooled in 134 attacks by an adversary holding only two of five domains.
+\end{itemize}
+
+\begin{figure}[!htbp]\centering
+\includegraphics[width=\linewidth]{fig10_corruption.png}\\[2pt]
+\includegraphics[width=0.49\linewidth]{fig11_ablation.png}\hfill
+\includegraphics[width=0.49\linewidth]{fig13_adversary.png}
+\caption{E10/E11. Top: exact recovery, wrong records accepted, and boundary-null runs with a false confirmation after repair, as functions of the per-item corruption rate (80 runs). Bottom left: paired ablation at $\rho=0.3$. Bottom right: fraction of coordinated attacks in which a wrong value was accepted, by number of compromised anchor domains~$b$.}\label{fig:corruption}
+\end{figure}
+
+\subsection{A real controlled environment}\label{sec:sqa}
+\paragraph{Environment.} We deployed QUINTET as five coordinator containers plus six worker containers (simulated executor devices, each limited to 0.5 CPU and 192\,MB) on a private Docker network. All faults were real, with only free tools:
+\begin{itemize}
+\item every worker connection passed through Toxiproxy, which injected latency, timeouts and connection resets;
+\item processes were crashed, frozen and partitioned with \texttt{docker kill}, \texttt{pause} and \texttt{network disconnect};
+\item storage was corrupted by editing the coordinators' on-disk files while they were stopped.
+\end{itemize}
+
+\paragraph{Test plan.} Twelve test cases with pass criteria were committed before execution (Table~\ref{tab:sqa}). After every case a harness pulled all five stores and checked six invariants:
+\begin{itemize}
+\item write-once records;
+\item the global budget $\sum a_j\le\varepsilon$;
+\item no stuck slots;
+\item confirmations reproducible from stored records;
+\item full replication;
+\item the frontier.
+\end{itemize}
+
+\paragraph{Outcome.} The final run passed 19 of 21 cases. Under latency, timeouts, resets, a killed Recorder, a frozen Arbiter, a partitioned Treasurer and killed workers, every invariant held and every record verified. Slots whose results never arrived became crash results (R4): up to 131 per run under resets. After on-disk corruption of all five stores at $\rho=0.05$, 0.2 and 0.4, the repaired graph matched the pre-corruption graph on 0.9996, 0.993 and 0.937 of records, with no wrong record and no added confirmation. Erasing the data of two coordinators lost nothing, or 4\% of records, depending on which two. Five boundary-null runs of about 900 episodes each produced no false confirmation. The two failures were:
+\begin{itemize}
+\item a power miss ($\bhat=4$ instead of $k^*=3$ in one baseline run);
+\item a convergence criterion at $\rho=0.4$: a second repair scan recovered one more record, using evidence that a healed coordinator re-offered after the first scan.
+\end{itemize}
+
+\paragraph{Defects found.} The campaign found seven defects in the networked service, none in TWGR, and all were fixed with regression tests. Four were integrity defects: a restarted Recorder fabricating a crash result for a slot whose result it had lost locally; a coordinator re-deciding from damaged local data; damaged copies being re-replicated with receipts; and a quarantined result served to the Arbiter. All four had one cause: a coordinator trusted its own storage after a fault. Two principles fixed them, and we recommend both for any harness that keeps evidence on disk:
+\begin{itemize}
+\item \emph{repair before serve}: a restarted service that finds its store damaged acts only after a repair;
+\item \emph{anchor-verified reads}: a service uses a local record only if the record matches a digest it committed when writing it.
+\end{itemize}
+The in-process experiments could not reveal these defects because they have no restarts.
+
+\begin{table}[!htbp]\centering\small
+\caption{E12: SQA campaign on Docker devices (final run). Criteria were fixed before execution; the full report and all failing earlier runs are in the repository.}\label{tab:sqa}
+\begin{tabularx}{\linewidth}{lXl}
+\toprule
+TC & Fault and outcome & Verdict \\\midrule
+1 & none; all records verified, $\bhat=4\ne k^*$ (power miss) & FAIL \\
+2--3 & latency 150$\pm$100\,ms; timeouts and resets on 15\% of connections & PASS \\
+4--7 & Recorder killed; Arbiter frozen 15\,s; Treasurer partitioned 15\,s; 2 of 6 workers killed & PASS \\
+8 & on-disk corruption $\rho=0.05$ / $0.2$ / $0.4$: recovery 0.9996 / 0.993 / 0.937, 0 wrong & PASS / PASS / FAIL$^{a}$ \\
+9 & data of 2 coordinators erased: recovery 1.000 and 0.960, 0 wrong & PASS \\
+10 & adversary in 1 or 2 domains: 0 wrong under a minority adversary & PASS \\
+11 & boundary null, 5 runs: 0 false confirmations & PASS \\
+12 & resume work after repair: 760 new records, 0 conflicts & PASS \\
+\bottomrule\multicolumn{3}{l}{\footnotesize $^{a}$ a second repair scan recovered one more record (repair not converged after one scan).}
+\end{tabularx}
 \end{table}
 
 \subsection{Real-agent experiments}\label{sec:real}
@@ -342,26 +525,26 @@ Authorized-task completion & \todo{TO RUN} & \todo{TO RUN} \\
 
 % -----------------------------------------------------------------------------
 \section{Threats to validity}\label{sec:threats}
-\textit{Construct:} the fault rates are chosen triggers, not measurements; real harnesses may show smaller (or larger) effects. \textit{Internal:} procedure parameters were not tuned beyond a small preregistered sweep; one LEXIS variant is labelled exploratory; the fixed-sample rule study was added during reframing. \textit{Statistical:} 400 runs per system-level cell limit detection of modest inflation, which is why the global-budget result remains open at $W=8$; seeds share random streams across methods. \textit{External:} simulated generators are non-adaptive and instances small. \textit{Implementation:} the database-backed ledger is specified but not executed; coordination cost is measured in virtual time.
+\textit{Construct:} the fault rates are chosen triggers, not measurements; real harnesses may show smaller (or larger) effects. \textit{Internal:} procedure parameters were not tuned beyond a small preregistered sweep; one LEXIS variant is labelled exploratory; the fixed-sample rule study was added during reframing. \textit{Statistical:} 400 runs per system-level cell limit detection of modest inflation, which is why the global-budget result remains open at $W=8$; seeds share random streams across methods. \textit{External:} simulated generators are non-adaptive and instances small. \textit{Implementation:} the database-backed ledger is specified but not executed; coordination cost is measured in virtual time. \textit{Corruption model:} E10 corrupts items independently and its tampering is deterministic per record type; correlated faults (a disk failing gradually, a buggy writer) are represented only by whole-domain loss and by the coordinated adversary. \textit{Real environment:} the SQA campaign ran on one host, so its network faults are injected rather than geographic, and each test case ran once per campaign run; the seven fixed defects show that the implementation was immature, and further defects may remain.
 
 \section{Limitations and negative results}\label{sec:limits}
-(i) No real-agent results. (ii) No speed-up from a shared coordinator. (iii) Sequential confirmation, with or without screening, is somewhat less powerful than a repaired fixed design at a fixed budget. (iv) Certificates are loose at realistic audit budgets. (v) The necessity of the global budget was not established at $W=8$ at system level for sequential tests (it was for fixed-sample tests). (vi) Byzantine executors are not covered. (vii) Bit-reproducible epoch mode and a database adapter are not implemented.
+(i) No real-agent results. (ii) No speed-up from a shared coordinator. (iii) Sequential confirmation, with or without screening, is somewhat less powerful than a repaired fixed design at a fixed budget. (iv) Certificates are loose at realistic audit budgets. (v) The necessity of the global budget was not established at $W=8$ at system level for sequential tests (it was for fixed-sample tests). (vi) Byzantine executors are not covered; storage faults and a minority of compromised coordinator domains are. (vii) Bit-reproducible epoch mode and a database adapter are not implemented. (viii) Requiring two-domain support in TWGR costs availability when whole domains are lost (0.754 recovered with three of five lost, against 0.910 without the requirement). (ix) Per-domain voting brought no measurable gain under random corruption. (x) TWGR quarantines a record it cannot verify but does not re-establish its lost anchors, so repeated scans can recover more once healed coordinators re-offer evidence.
 
 \section{Reproducibility and data availability}\label{sec:repro}
-Code, configurations, raw results (JSON lines with configuration hashes and code revisions), analysis scripts and figures are in the project repository \todo{INSERT PERMANENT ARCHIVE DOI}. One script regenerates every result in about two hours on four cores; 46 unit, property-based and integration tests cover the ledger, protocol, procedures and simulator; the simulator is deterministic given configuration and seed.
+Code, configurations, raw results (JSON lines with configuration hashes and code revisions), analysis scripts and figures are in the project repository \todo{INSERT PERMANENT ARCHIVE DOI}. One script regenerates every synthetic result in about three hours on four cores (Stage-7 experiments included). 73 unit, property-based and integration tests cover the ledger, protocol, procedures, simulator, evidence graph, TWGR and the networked QUINTET services; the latter include regression tests for every defect found in the real-environment campaign. The simulator is deterministic given configuration and seed. The real-environment campaign is reproducible with free software (Docker, Toxiproxy, AgentDojo, Ollama) by one command each; every failing campaign run is retained with its raw data.
 
 \section{Future work}\label{sec:future}
-Execute the real-agent protocol; measure the rules' effect in widely used open-source evaluation harnesses; extend the rules to estimators with adaptive allocation of confirmation trials and to Byzantine executors with attestation; and narrow the power gap of anytime-valid confirmation at fixed budgets.
+Execute the full real-agent protocol at scale; measure the rules' effect in widely used open-source evaluation harnesses; extend the rules to estimators with adaptive allocation of confirmation trials and to Byzantine executors with attestation; and narrow the power gap of anytime-valid confirmation at fixed budgets.
 
 \section{Conclusion}\label{sec:conclusion}
-The error level of an agent security evaluation is a property of the whole experiment, including how its harness delivers, retries, orders and budgets episodes. We gave six rules that make sequential and fixed-sample confirmation valid under the faults of real infrastructure, showed that each common default can break validity, repaired an estimator that was invalid as specified, and found that the rules are cheap while a shared coordinator and anytime-valid confirmation buy flexibility rather than speed or power. Real-agent measurements remain to be done.
+The error level of an agent security evaluation is a property of the whole experiment, including how its harness delivers, retries, orders and budgets episodes. We gave six rules that make sequential and fixed-sample confirmation valid under the faults of real infrastructure, showed that each common default can break validity, repaired an estimator that was invalid as specified, and found that the rules are cheap while a shared coordinator and anytime-valid confirmation buy flexibility rather than speed or power. Splitting the coordinator into five services over a self-verifying evidence graph makes the evidence itself survive storage corruption, without ever adding a confirmation. Testing that design on real infrastructure taught a lesson the simulations could not: a service must treat its own storage as untrusted evidence after any fault.
 
 % -----------------------------------------------------------------------------
 \section*{Declarations}
 \noindent\textbf{Funding.} \todo{INSERT TRUE FUNDING INFORMATION OR ``No funding was received''.}\\
 \textbf{Competing interests.} \todo{AUTHORS TO DISCLOSE.}\\
 \textbf{Ethics approval.} Not applicable to the simulation study; the real-agent protocol uses sandboxed mock tools and no human participants \todo{CONFIRM BEFORE REAL-AGENT RUNS}.\\
-\textbf{Data availability.} Synthetic results are released with the code \todo{ARCHIVE DOI}. No real-agent data exist yet.\\
+\textbf{Data availability.} Synthetic results, the SQA campaign data (including failing runs) and the real-agent episode records are released with the code \todo{ARCHIVE DOI}.\\
 \textbf{Code availability.} \todo{REPOSITORY URL AND ARCHIVE DOI}.\\
 \textbf{Author contributions.} \todo{CRediT STATEMENT}.\\
 \textbf{Use of generative AI.} \todo{AUTHORS MUST DISCLOSE: substantial parts of the design, code, analysis and text of this working manuscript were drafted with an AI assistant and must be verified and declared according to the journal's policy.}

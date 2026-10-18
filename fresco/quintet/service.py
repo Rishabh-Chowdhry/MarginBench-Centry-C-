@@ -138,7 +138,7 @@ class Coordinator:
             self.next_k[j] = max(self.next_k.get(j, 1), kk + 1)
         if self.role == "recorder":               # open slots resume their expiry clock after a restart
             for j, kk in self._slots(ids):
-                if ("Result", f"{j}:{kk}") not in self.store.blobs:
+                if ("Result", f"{j}:{kk}") not in ids:
                     self.slot_time.setdefault((j, kk), time.time())
         self.funded = {}                          # (lease, i) -> j
         for n in self._nodes("Allocation"):
@@ -150,19 +150,26 @@ class Coordinator:
         self.frontier_seq = max((int(n.key) for n in self._nodes("Frontier")), default=0)
 
     def _resync(self):
-        """After a restart the in-memory replication queues are gone: re-offer every
-        owned record to its witnesses (idempotent) and, at the Recorder, re-trigger
-        arbitration for every candidate with results (idempotent at the Arbiter)."""
+        """After a restart the in-memory replication queues are gone: re-offer owned
+        records to their witnesses (idempotent) and, at the Recorder, re-trigger
+        arbitration for every candidate with results (idempotent at the Arbiter).
+        Only records matching this domain's own verified anchor are re-offered, and
+        without a receipt, so a locally damaged copy can never gain a vote elsewhere
+        (E12 defect D3)."""
+        mine = {}
+        for i, d, ok in self.store.anchor_entries():
+            if ok:
+                mine.setdefault(i, set()).add(d)
         js = set()
         for nid, b in list(self.store.blobs.items()):
             try:
                 n = Node.decode(b)
             except ValueError:
                 continue
-            if n.owner != self.role or n.id != nid:
+            if n.owner != self.role or n.id != nid or n.digest() not in mine.get(nid_str(nid), ()):
                 continue
             for w in witnesses(nid, n.owner):
-                self._enqueue(w, "/store", {"id": nid_str(nid), "b": b64(b)})
+                self._enqueue(w, "/store", {"id": nid_str(nid), "b": b64(b), "receipt": False})
             if nid[0] == "Result":
                 js.add(nid[1].rsplit(":", 1)[0])
         for j in sorted(js):
@@ -270,7 +277,7 @@ class Coordinator:
 
     # common to all domains
     def op_store(self, body):
-        st = self._put_local(parse_id(body["id"]), unb64(body["b"]))
+        st = self._put_local(parse_id(body["id"]), unb64(body["b"]), anchor=body.get("receipt", True))
         return (409 if st == "conflict" else 200), {"result": st}
 
     def op_anchor(self, body):
@@ -395,6 +402,8 @@ class Coordinator:
         cur = self.store.blobs.get(nid)
         if cur is not None:
             return (200 if cur == node.encode() else 409), {"result": "exists"}
+        if self._known_elsewhere(nid) is not False:   # lost locally but may exist elsewhere: repair first
+            return 409, {"result": "exists elsewhere or unknown"}
         self.publish(node)
         with self.lock:
             self.slot_time.pop((j, k), None)
@@ -416,10 +425,32 @@ class Coordinator:
             with self.lock:
                 due = [s for s, t in self.slot_time.items() if now - t > self.slot_ttl]
             for j, k in due:
-                if ("Result", f"{j}:{k}") not in self.store.blobs:
-                    self._record(j, k, {"crashed": True})
+                nid = ("Result", f"{j}:{k}")
+                if nid not in self.store.blobs:
+                    known = self._known_elsewhere(nid)
+                    if known is None:
+                        continue                  # cannot tell: postpone (safety over liveness)
+                    if not known:
+                        self._record(j, k, {"crashed": True})
                 with self.lock:
                     self.slot_time.pop((j, k), None)
+
+    def _known_elsewhere(self, nid):
+        """Whether any other domain holds a copy or an anchor of nid (None: unknown).
+        A Recorder that lost its local copy must never expire a slot whose result
+        exists elsewhere: that would fabricate a crash result (E12 defect D2)."""
+        try:
+            if call(self.peers["archivist"], "/anchored?id=" + nid_str(nid), timeout=3).get("anchored"):
+                return True
+        except Unavailable:
+            return None
+        for d in witnesses(nid, self.role):
+            try:
+                if "b" in call(self.peers[d], "/node?id=" + nid_str(nid), timeout=3):
+                    return True
+            except Unavailable:
+                return None
+        return False
 
     def op_results(self, body):
         j = body["j"]
@@ -550,6 +581,9 @@ def make_handler(coord):
             if path == "/node":
                 b = coord.store.blobs.get(parse_id(q.get("id", ":")))
                 return self._send(200 if b is not None else 404, {"b": b64(b)} if b is not None else {})
+            if path == "/anchored":
+                i = q.get("id", "")
+                return self._send(200, {"anchored": any(e[0] == i for e in coord.store.anchor_entries())})
             if path == "/ids":
                 return self._send(*coord.op_ids({}))
             return self._send(404, {"error": "not found"})

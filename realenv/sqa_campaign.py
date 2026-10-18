@@ -140,6 +140,7 @@ class Cluster:
         names = []
         for i in range(n):
             name = f"q-{prefix}{i + 1}"
+            sh("docker", "rm", "-f", name, check=False)
             sh("docker", "run", "-d", "--name", name, "--network", NET, "--cpus", "0.5", "--memory", "192m",
                "-v", f"{ROOT}:/app:ro", *self.env(peers), IMAGE, "python", "-m", "fresco.quintet.service",
                "worker", "--name", f"{prefix}{i + 1}", "--budget", str(budget), "--seed", str(seed0 + i))

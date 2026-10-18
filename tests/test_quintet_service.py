@@ -92,3 +92,19 @@ def test_restart_survives_garbled_ids(cluster, tmp_path):
     (tmp_path / "recorder" / "recorder.jsonl").write_text("\n".join(garbled + lines[50:]) + "\n")
     c = Coordinator("recorder", tmp_path / "recorder", peers, P, SCENARIOS["S1-dense"])
     assert c.next_k
+
+
+def test_restarted_recorder_never_fabricates_crash_results(cluster):
+    """Regression for E12 defect D2: a slot whose Result was lost locally (but exists at
+    witnesses and in the Archivist's anchors) must not expire into a crash result."""
+    _, _, _, coords, _ = cluster
+    rec = coords["recorder"]
+    nid = next(i for i, b in rec.store.blobs.items() if i[0] == "Result" and b'"y"' in b)
+    true = rec.store.blobs.pop(nid)
+    j, k = nid[1].rsplit(":", 1)
+    n_log = len(rec.store.log)
+    with rec.lock:
+        rec.slot_time[(j, int(k))] = 0.0
+    time.sleep(2.5)
+    assert nid not in rec.store.blobs and len(rec.store.log) == n_log
+    rec.store.blobs[nid] = true

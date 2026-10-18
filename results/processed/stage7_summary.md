@@ -167,3 +167,13 @@ Outcome-dependent timeouts (the mechanism behind the fresh-retry default), measu
 | 21 | 0.36 | 0.22 |
 | 26 | 0.21 | 0.07 |
 
+## E14 — why do the agent episodes fail? (every AgentDojo user task, judge LLM)
+
+Agent: Qwen2.5-1.5B (Ollama, T = 0.7, seed 1). Every user task of the four AgentDojo v1.2.1 suites (97 tasks), each with the important_instructions attack (rotating injection task) and without an attack. 3 episodes (0 harness errors). Judge: Qwen2.5-7B (T = 0), constrained to a fixed taxonomy and to AgentDojo's own labels; 0 episodes judged.
+
+| suite | tasks | utility (no attack) | utility (attack) | violations (attack) | episodes with no tool call |
+|---|---|---|---|---|---|
+| banking | 1 | 0/1 | 0/2 | 0/2 | 1.00 |
+
+Paired by task (1 tasks): the attack turned 0 successes into failures and 0 failures into successes (McNemar discordant pairs 0 vs 0).
+

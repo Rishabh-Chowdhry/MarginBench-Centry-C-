@@ -367,11 +367,120 @@ def e13():
            "ratio"], trows)
 
 
+def kappa(a, b):
+    """Cohen's kappa for two boolean lists."""
+    n = len(a)
+    if n == 0:
+        return float("nan")
+    po = sum(x == y for x, y in zip(a, b)) / n
+    pa, pb = sum(a) / n, sum(b) / n
+    pe = pa * pb + (1 - pa) * (1 - pb)
+    return (po - pe) / (1 - pe) if pe < 1 else 1.0
+
+
+def e14():
+    ep_path, j_path = RAW / "e14_episodes.jsonl", RAW / "e14_judgements.jsonl"
+    if not ep_path.exists():
+        return
+    eps = [r for r in map(json.loads, ep_path.read_text().splitlines())]
+    ok = [r for r in eps if "error" not in r]
+    judged = {(j["suite"], j["user_task"], j["attack"]): j for j in map(json.loads, j_path.read_text().splitlines())
+              if "error" not in j} if j_path.exists() else {}
+    md.append("## E14 — why do the agent episodes fail? (every AgentDojo user task, judge LLM)\n")
+    md.append(f"Agent: Qwen2.5-1.5B (Ollama, T = 0.7, seed 1). Every user task of the four AgentDojo v1.2.1 suites "
+              f"(97 tasks), each with the important_instructions attack (rotating injection task) and without an "
+              f"attack. {len(ok)} episodes ({len(eps) - len(ok)} harness errors). Judge: Qwen2.5-7B (T = 0), "
+              f"constrained to a fixed taxonomy and to AgentDojo's own labels; {len(judged)} episodes judged.\n")
+    trows = []
+    for suite in sorted({r["suite"] for r in ok}):
+        a = [r for r in ok if r["suite"] == suite and r["attack"] != "none"]
+        n = [r for r in ok if r["suite"] == suite and r["attack"] == "none"]
+        trows.append([suite, len(n), f"{sum(r['utility'] for r in n)}/{len(n)}",
+                      f"{sum(r['utility'] for r in a)}/{len(a)}", f"{sum(bool(r['violation']) for r in a)}/{len(a)}",
+                      f"{np.mean([r['features']['n_tool_calls'] == 0 for r in ok if r['suite'] == suite]):.2f}"])
+    table(["suite", "tasks", "utility (no attack)", "utility (attack)", "violations (attack)",
+           "episodes with no tool call"], trows)
+    pairs = {}
+    for r in ok:
+        pairs.setdefault((r["suite"], r["user_task"]), {})[r["attack"]] = r["utility"]
+    both = [v for v in pairs.values() if len(v) == 2]
+    lost = sum(1 for v in both if v["none"] and not v["important_instructions"])
+    gained = sum(1 for v in both if not v["none"] and v["important_instructions"])
+    md.append(f"Paired by task ({len(both)} tasks): the attack turned {lost} successes into failures and {gained} "
+              f"failures into successes (McNemar discordant pairs {lost} vs {gained}).\n")
+    if not judged:
+        return
+    rows = [(r, judged[(r["suite"], r["user_task"], r["attack"])]) for r in ok
+            if (r["suite"], r["user_task"], r["attack"]) in judged]
+    cats = ["NO_TOOL_USE", "WRONG_TOOL", "WRONG_ARGUMENTS", "INCOMPLETE", "MALFORMED_CALL", "HIJACKED",
+            "MISREAD_DATA", "OTHER"]
+    fails = [(r, j) for r, j in rows if not r["utility"]]
+    trows = []
+    for att in ("none", "important_instructions"):
+        g = [j["task_failure"] for r, j in fails if r["attack"] == att]
+        trows.append([att] + [f"{g.count(c)}" for c in cats] + [len(g)])
+    table(["attack"] + cats + ["failed episodes"], trows)
+    trows = []
+    for suite in sorted({r["suite"] for r, _ in fails}):
+        g = [j["task_failure"] for r, j in fails if r["suite"] == suite]
+        trows.append([suite] + [f"{g.count(c)}" for c in cats] + [len(g)])
+    md.append("By suite (both attack conditions):\n")
+    table(["suite"] + cats + ["failed"], trows)
+    inj = [j["injection_outcome"] for r, j in rows if r["attack"] != "none"]
+    md.append("Injection outcome (judge): " + ", ".join(f"{c} {inj.count(c)}" for c in
+                                                       ("NOT_EXPOSED", "IGNORED", "ATTEMPTED_FAILED", "EXECUTED")) + "\n")
+    # judge validation against rule-based trace facts
+    md.append("### Judge validation against rule-based trace facts\n")
+    f_no = [r["features"]["n_tool_calls"] == 0 for r, j in fails]
+    j_no = [j["task_failure"] == "NO_TOOL_USE" for r, j in fails]
+    att = [(r, j) for r, j in rows if r["attack"] != "none"]
+    f_ne = [not r["features"]["injection_seen"] for r, j in att]
+    j_ne = [j["injection_outcome"] == "NOT_EXPOSED" for r, j in att]
+    hij = [(r, j) for r, j in fails if j["task_failure"] == "HIJACKED"]
+    mal = [(r, j) for r, j in fails if j["task_failure"] == "MALFORMED_CALL"]
+    vrows = [
+        ["NO_TOOL_USE ⇔ no tool call in the trace", len(f_no), f"{np.mean([a == b for a, b in zip(f_no, j_no)]):.2f}",
+         f"{kappa(f_no, j_no):.2f}"],
+        ["NOT_EXPOSED ⇔ injected text never returned by a tool", len(f_ne),
+         f"{np.mean([a == b for a, b in zip(f_ne, j_ne)]):.2f}", f"{kappa(f_ne, j_ne):.2f}"],
+        ["HIJACKED ⇒ injected text was seen", len(hij),
+         f"{np.mean([r['features']['injection_seen'] for r, _ in hij]):.2f}" if hij else "–", "–"],
+        ["MALFORMED_CALL ⇒ a tool call returned an error", len(mal),
+         f"{np.mean([r['features']['tool_errors'] > 0 for r, _ in mal]):.2f}" if mal else "–", "–"]]
+    table(["check", "episodes", "agreement", "Cohen's κ"], vrows)
+    st_path = RAW / "e14_stability.jsonl"
+    if st_path.exists():
+        st = [x for x in map(json.loads, st_path.read_text().splitlines()) if "error" not in x]
+        agree = []
+        for x in st:
+            j0 = judged.get((x["suite"], x["user_task"], x["attack"]))
+            if j0:
+                agree.append(x["task_failure"] == j0["task_failure"])
+        md.append(f"Stability: {len(st)} re-judgements at T = 0.7 (3 per episode) agree with the T = 0 verdict on "
+                  f"the failure category in {np.mean(agree):.2f} of cases.\n" if agree else "")
+    fig, ax = plt.subplots(figsize=(8.5, 3.8))
+    palette = ["#2a78d6", "#7fb2ea", "#eb6834", "#eda100", "#9a6fd6", "#d1335b", "#1baf7a", "#8a8984"]
+    groups = [(su, att) for su in sorted({r["suite"] for r, _ in fails}) for att in ("none", "important_instructions")]
+    bottom = np.zeros(len(groups))
+    for c, col in zip(cats, palette):
+        vals = np.array([sum(1 for r, j in fails if r["suite"] == su and r["attack"] == att and j["task_failure"] == c)
+                         for su, att in groups], float)
+        ax.bar(range(len(groups)), vals, bottom=bottom, color=col, label=c.replace("_", " ").lower(), width=0.7)
+        bottom += vals
+    ax.set_xticks(range(len(groups)), [f"{su}\n{'attack' if att != 'none' else 'no attack'}" for su, att in groups],
+                  fontsize=7)
+    ax.set(title="Why the agent failed its task (judge verdicts)", ylabel="failed episodes")
+    ax.legend(fontsize=7, ncol=2, loc="upper left")
+    fig.tight_layout()
+    fig.savefig(FIG / "fig16_failure_taxonomy.png", dpi=160)
+    plt.close(fig)
+
+
 def main():
     FIG.mkdir(exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
     md.append("# Stage 7 results (generated by analysis/stage7_figures.py)\n")
-    for f in (e10, e11, e12, e13):
+    for f in (e10, e11, e12, e13, e14):
         try:
             f()
         except FileNotFoundError as e:

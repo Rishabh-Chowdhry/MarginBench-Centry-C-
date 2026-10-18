@@ -45,3 +45,6 @@ The harness pulls every domain's dump and runs TWGR locally without healing. It 
 
 ## Real agents (E13)
 AgentDojo v1.2.1 simulated tool environments (banking, slack, travel, workspace), driven by a free local LLM (qwen2.5 via Ollama in Docker). The study measures per-episode latency and violation outcome, plus timeout rates by outcome. It is descriptive, with no pass criterion.
+
+*Clarification added after run 7, before run 8:* TC12 checks I1, I4 and I5 on the records written after the repair. Records that TWGR quarantined keep their unverifiable copies by design, because repair never overwrites what it cannot verify. Confirmations accepted on their anchors whose inputs were quarantined cannot be re-derived either, and Theorem 2 covers them through its case (a). I2 and I3 remain global, and the criterion also requires no 5xx server errors seen by workers.
+

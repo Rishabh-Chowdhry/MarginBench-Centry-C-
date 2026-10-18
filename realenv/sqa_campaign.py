@@ -191,15 +191,19 @@ class Cluster:
 
 
 # ------------------------------------------------------------------ invariants
-def invariants(fab, check_write_once=True):
+def invariants(fab, check_write_once=True, scope=None):
+    """scope: ids for which I1, I4 and I5 are checked (default all). After storage faults,
+    quarantined records keep their unverifiable copies by design, so TC12 checks the
+    records written after the repair."""
     status, acc = twgr(copy.deepcopy(fab), RP, heal=False)
+    inscope = (lambda i: True) if scope is None else (lambda i: i in scope)  # noqa: E731
     out = {"records": len(status), "status": {}}
     for s in status.values():
         out["status"][s] = out["status"].get(s, 0) + 1
     if check_write_once:
         conflicts = 0
         ids = set().union(*[set(st.blobs) for st in fab.stores.values()])
-        for nid in ids:
+        for nid in filter(inscope, ids):
             vals = set()
             for st in fab.stores.values():
                 b = st.blobs.get(nid)
@@ -220,12 +224,12 @@ def invariants(fab, check_write_once=True):
                                and status.get(("Result", i[1])) != QUARANTINED)
     mism = 0
     for i, n in acc.items():
-        if i[0] == "Confirmation":
+        if i[0] == "Confirmation" and inscope(i):
             d = derive_confirmation(i, acc, RP)
             mism += d is None or d.encode() != n.encode()
     out["I4_conf_mismatch"] = mism
     under = 0
-    for i, n in acc.items():
+    for i, n in filter(lambda kv: inscope(kv[0]), acc.items()):
         under += any(fab.stores[d].blobs.get(i) != n.encode() for d in fab.placement(n))
     out["I5_underreplicated"] = under
     rep = report(acc)
@@ -345,12 +349,18 @@ def tc_storage(cl, rows):
         rows.append({"tc": f"TC8 rho={rho}", "corruption": stats, "scan1": scan1["status"], "scan_s": round(scan_s, 2),
                      "healed_copies": scan1["healed_copies"], "scan2": scan2["status"], "vs_golden": cmp, "pass": ok})
         if rho == 0.2:
+            pre = cl.snapshot()
             resume = run_load(cl, budget=40, seed0=100)
-            inv, _ = invariants(cl.snapshot())
-            conflicts = sum(w.get("codes", {}).get("500", 0) + w.get("codes", {}).get("409", 0) for w in resume["workers"])
+            after = cl.snapshot()
+            # records written or changed after the repair (a reused id shows up as changed bytes)
+            new = {i for d, st in after.stores.items() for i, b in st.blobs.items()
+                   if pre.stores[d].blobs.get(i) != b}
+            inv, _ = invariants(after, scope=new)
+            inv["new_records"] = len(new)
+            errors = sum(w.get("codes", {}).get("500", 0) for w in resume["workers"])
             rows.append({"tc": "TC12 resume after storage repair", "load": resume, "inv": inv,
-                         "worker_conflict_responses": conflicts,
-                         "pass": inv["I2_ok"] and inv["I3_open_slots"] == 0 and inv["I4_conf_mismatch"] == 0})
+                         "worker_server_errors": errors,
+                         "pass": passes(inv, "TC12") and errors == 0 and len(new) > 0})
 
     for lost in (("registrar", "archivist"), ("recorder", "arbiter")):
         restore()

@@ -96,7 +96,8 @@ def e10():
         lo = [bootstrap_ci([r["recovery"] for r in by[(v, x)]], reps=1000)[1] for x in rhos]
         hi = [bootstrap_ci([r["recovery"] for r in by[(v, x)]], reps=1000)[2] for x in rhos]
         ls = "--" if v in ("replica-majority", "best-effort", "single-coordinator") else "-"
-        axs[0].plot(rhos, m, ls, color=VCOL[v], label=v, **{**MK, "markersize": 4})
+        z = 5 if v == "TWGR" else 2
+        axs[0].plot(rhos, m, ls, color=VCOL[v], label=v, zorder=z, **{**MK, "markersize": 4})
         axs[0].fill_between(rhos, lo, hi, color=VCOL[v], alpha=0.12, linewidth=0)
         w = [np.mean([r["wrong_nonconf"] for r in by[(v, x)]]) for x in rhos]
         axs[1].plot(rhos, np.array(w) + 0.1, ls, color=VCOL[v], **{**MK, "markersize": 4})
@@ -106,6 +107,10 @@ def e10():
                ylabel="fraction of records recovered exactly")
     axs[1].set(title="Wrong records accepted (per run)", xlabel="corruption rate ρ", ylabel="mean count + 0.1 (log)",
                yscale="log")
+    for ax in axs[1:]:
+        ax.annotate("TWGR, every ablation and\nsingle-coordinator: 0 at every ρ", xy=(0.3, 0.1 if ax is axs[1] else 0),
+                    xytext=(0.18, 3 if ax is axs[1] else 0.25), fontsize=8, color=INK2,
+                    arrowprops=dict(arrowstyle="-", color=INK2, lw=0.8))
     axs[2].axhline(EPS, color=INK2, linewidth=1, linestyle=":")
     axs[2].text(rhos[-1], EPS, " ε", va="center", color=INK2)
     axs[2].set(title="Boundary-null: runs with a false confirmation", xlabel="corruption rate ρ",

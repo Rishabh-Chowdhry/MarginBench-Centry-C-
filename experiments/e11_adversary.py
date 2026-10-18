@@ -26,7 +26,7 @@ from experiments.common import run_jobs_streaming  # noqa: E402
 from experiments.e10_corruption import PARAMS, SCENARIOS, VARIANTS  # noqa: E402
 from fresco.hkg.corrupt import tamper_node  # noqa: E402
 from fresco.hkg.graph import DOMAINS, Node, canon, nid_str, sha  # noqa: E402
-from fresco.hkg.repair import QUARANTINED, build_log_index, build_reverse_index, twgr  # noqa: E402
+from fresco.hkg.repair import QUARANTINED, build_log_index, build_reverse_index, report, twgr  # noqa: E402
 from fresco.quintet.cluster import Quintet, QuintetConfig  # noqa: E402
 
 TARGETS = 12
@@ -70,34 +70,56 @@ def anchor_domains(fab, nid):
     return {d for d, _ in logs.get(nid, [])} | {d for d, _ in rev.get(nid, [])}
 
 
+ATTACKS = (("tamper-result", 8), ("tamper-confirmation", 6), ("suppress-result", 6), ("inflate-lease", 3),
+           ("retarget-candidate", 4))
+EVAL = ("TWGR", "TWGR-S", "replica-majority")
+
+
+def targets(truth, attack, rng, n):
+    def pl(i):
+        return Node.decode(truth[i]).payload
+    pool = {"tamper-result": lambda i: i[0] == "Result" and pl(i).get("y") == 0,
+            "tamper-confirmation": lambda i: i[0] == "Confirmation" and not pl(i)["confirmed"],
+            "suppress-result": lambda i: i[0] == "Result" and pl(i).get("y") == 1,
+            "inflate-lease": lambda i: i[0] == "Lease",
+            "retarget-candidate": lambda i: i[0] == "Candidate" and pl(i)["level"] > 1}[attack]
+    ids = sorted(i for i in truth if pool(i))
+    return [ids[int(t)] for t in rng.choice(len(ids), size=min(n, len(ids)), replace=False)]
+
+
+def forged(node, attack):
+    if attack == "suppress-result":                 # a signed outcome replaced by an unsigned crash
+        return Node(node.type, node.key, {"crashed": True}, node.owner, node.edges)
+    return tamper_node(node)                        # format-valid rewrite (signatures, if any, now stale)
+
+
 def one(cfg):
     rng = np.random.default_rng(cfg["seed"])
     q = Quintet(SCENARIOS["S1-dense"], PARAMS, QuintetConfig(workers=4, budget=1500, crash=0.02),
                 np.random.default_rng(cfg["seed"]))
     q.run()
     truth = q.fabric.truth
-    res = [i for i in truth if i[0] == "Result" and Node.decode(truth[i]).payload.get("y") == 0]
-    conf = [i for i in truth if i[0] == "Confirmation" and not Node.decode(truth[i]).payload["confirmed"]]
-    picks = [res[int(t)] for t in rng.choice(len(res), size=min(TARGETS, len(res)), replace=False)]
-    picks += [conf[int(t)] for t in rng.choice(len(conf), size=min(TARGETS // 2, len(conf)), replace=False)]
+    true_conf = {k for _, k in q.truth_report()["confirmed"]}
     rows = []
-    for nid in picks:
-        anchors = anchor_domains(q.fabric, nid)
-        bad = tamper_node(Node.decode(truth[nid]))
-        for k in range(1, 6):
-            B = [str(d) for d in rng.choice(DOMAINS, size=k, replace=False)]
-            b = len(set(B) & anchors)
-            for name in ("TWGR", "replica-majority"):
-                fab = copy.deepcopy(q.fabric)
-                control(fab, nid, bad, B)
-                status, acc = twgr(fab, PARAMS, VARIANTS[name], heal=False)
-                got = acc.get(nid)
-                rows.append({"type": nid[0], "k": k, "m": len(anchors), "b": b, "variant": name,
-                             "placement_hit": len(set(B) & set(q.fabric.placement(bad))),
-                             "wrong": int(got is not None and got.encode() != truth[nid]),
-                             "correct": int(got is not None and got.encode() == truth[nid]),
-                             "quarantined": int(status.get(nid) == QUARANTINED),
-                             "majority": int(2 * b > len(anchors))})
+    for attack, n in ATTACKS:
+        for nid in targets(truth, attack, rng, n):
+            anchors = anchor_domains(q.fabric, nid)
+            bad = forged(Node.decode(truth[nid]), attack)
+            for k in range(1, 6):
+                B = [str(d) for d in rng.choice(DOMAINS, size=k, replace=False)]
+                b = len(set(B) & anchors)
+                for name in EVAL:
+                    fab = copy.deepcopy(q.fabric)
+                    control(fab, nid, bad, B)
+                    status, acc = twgr(fab, q.p, VARIANTS[name], heal=False)
+                    got = acc.get(nid)
+                    wrong = int(got is not None and got.encode() != truth[nid])
+                    added = {kk for _, kk in report(acc)["confirmed"]} - true_conf
+                    rows.append({"attack": attack, "type": nid[0], "k": k, "m": len(anchors), "b": b, "variant": name,
+                                 "wrong": wrong, "correct": int(got is not None and got.encode() == truth[nid]),
+                                 "quarantined": int(status.get(nid) == QUARANTINED),
+                                 "conservative": int(wrong and got.payload == {"crashed": True}),
+                                 "added_conf": len(added), "majority": int(2 * b > len(anchors))})
     return {"rows": rows}
 
 

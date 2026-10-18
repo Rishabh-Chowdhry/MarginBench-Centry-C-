@@ -17,10 +17,11 @@ runs the same coordinators as separate networked processes.
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
+from fresco.hkg import sign as sg
 from fresco.hkg.graph import Fabric, Node, sha, canon
 from fresco.hkg.repair import (RunParams, evaluate_confirmation, make_allocation, make_confirmation,
                                make_key, make_lease)
@@ -37,8 +38,15 @@ class QuintetConfig:
 
 
 class Quintet:
-    def __init__(self, scenario, params, cfg, rng):
-        self.sc, self.p, self.cfg, self.rng = scenario, params, cfg, rng
+    def __init__(self, scenario, params, cfg, rng, device_seed=0):
+        self.sc, self.cfg, self.rng = scenario, cfg, rng
+        # executor devices sign their evidence; the manifest of their public keys is
+        # published before the run (outside every coordinator domain)
+        secrets = {f"w{w}": f"device-secret|{device_seed}|w{w}" for w in range(cfg.workers)}
+        self.device = {w: sg.device_key(s) for w, s in secrets.items()}
+        run_id = sha(canon(["run", params.run_key.hex(), device_seed]))
+        self.p = replace(params, manifest=sg.make_manifest(run_id, secrets))
+        self.nonce = 0
         self.fabric = Fabric(replicas=cfg.replicas)
         self.nodes = {}           # owner-side authoritative copies (what each coordinator serves)
         self.n_leases = 0
@@ -67,15 +75,18 @@ class Quintet:
         return self.n_leases
 
     # Registrar + Treasurer --------------------------------------------
-    def register(self, lease_n, level, content):
+    def register(self, lease_n, level, content, worker="w0"):
         lease = self.nodes[("Lease", str(lease_n))]
         if self.lease_use[lease_n] >= self.p.lease_size or level >= self.b_hat:
             return None
         self.lease_use[lease_n] += 1
         j = str(self.next_j)
         self.next_j += 1
-        cand = self._write(Node("Candidate", j, {"level": level, "content": content, "lease": lease.key,
-                                                 "i": self.lease_use[lease_n]}, "registrar",
+        self.nonce += 1
+        req = {"lease": lease.key, "level": level, "content": content, "worker": worker, "nonce": self.nonce,
+               "i": self.lease_use[lease_n]}
+        req["sig"] = sg.sign_request(self.device[worker], self.p.manifest["run_id"], req)
+        cand = self._write(Node("Candidate", j, req, "registrar",
                                 (("funded_by", "Lease", lease.key, lease.digest()),)))
         self._write(make_allocation(cand, lease))
         self.slots[j], self.results[j], self.status[j] = 1, [], "ACTIVE"
@@ -92,9 +103,12 @@ class Quintet:
         key = self._write(make_key(cand, k, self.p))
         self.calls += 1
         if self.rng.random() < self.cfg.crash:
-            payload = {"crashed": True}
+            payload = {"crashed": True}            # executor lost: unsigned crash (R4), conservative
         else:
-            payload = {"y": int(self.sc.outcome(cand.payload["level"], cand.payload["content"], key.payload["key"]))}
+            y = int(self.sc.outcome(cand.payload["level"], cand.payload["content"], key.payload["key"]))
+            sig = sg.sign_result(self.device[cand.payload["worker"]], self.p.manifest["run_id"], j, k, y,
+                                 sg.request_hash(cand.payload), key.payload["key"])
+            payload = {"y": y, "worker": cand.payload["worker"], "sig": sig}
         res = self._write(Node("Result", f"{j}:{k}", payload, "recorder",
                                (("for", "Candidate", j, cand.digest()), ("key", "Key", key.key, key.digest()),
                                 ("lease", "SlotLease", sl.key, sl.digest()))))
@@ -137,7 +151,7 @@ class Quintet:
                     if level >= self.b_hat:
                         break
                     content = int(self.rng.integers(self.sc.levels[level - 1].space))
-                    j = self.register(leases[w], level, content)
+                    j = self.register(leases[w], level, content, worker=f"w{w}")
                     if j is None:
                         break
                     mine[w].append(j)

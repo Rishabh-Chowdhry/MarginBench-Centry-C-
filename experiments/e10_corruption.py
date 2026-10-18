@@ -34,6 +34,8 @@ PARAMS = RunParams(eps=EPS, lease_size=8, run_key=b"e10-run-key", alpha=0.2, cap
 
 VARIANTS = {
     "TWGR": TWGRConfig(),
+    # added after the loophole report (majority adversary): origin signatures + derivation dominance
+    "TWGR-S": TWGRConfig(authenticate=True),
     "-replicas": TWGRConfig(use_replicas=False),
     "-log anchors": TWGRConfig(use_log_anchors=False),
     "-edge anchors": TWGRConfig(use_edge_anchors=False),
@@ -93,20 +95,20 @@ def one(cfg):
         corrupt_fabric(fab0, rho, np.random.default_rng(rng_seed))
         for name, vcfg in VARIANTS.items():
             fab = copy.deepcopy(fab0)
-            status, acc = twgr(fab, PARAMS, vcfg)
+            status, acc = twgr(fab, q.p, vcfg)
             rows.append({"study": "rho", "variant": name, "rho": rho, **score(q, fab, status, acc, scenario)})
         fab = copy.deepcopy(q1.fabric)
         corrupt_fabric(fab, rho, np.random.default_rng(rng_seed))
-        status, acc = twgr(fab, PARAMS, SINGLE[1])
+        status, acc = twgr(fab, q1.p, SINGLE[1])
         rows.append({"study": "rho", "variant": SINGLE[0], "rho": rho, **score(q1, fab, status, acc, scenario)})
     lose_rng = np.random.default_rng(seed + 77)
     for k in LOSSES:
         lost = list(lose_rng.choice(DOMAINS, size=k, replace=False))
-        for name in ("TWGR", "TWGR support-1", "replica-majority"):
+        for name in ("TWGR", "TWGR-S", "TWGR support-1", "replica-majority"):
             fab = copy.deepcopy(q.fabric)
             for d in lost:
                 fab.stores[d] = DomainStore(d)
-            status, acc = twgr(fab, PARAMS, VARIANTS[name])
+            status, acc = twgr(fab, q.p, VARIANTS[name])
             rows.append({"study": "loss", "variant": name, "lost": k, "lost_domains": lost,
                          **score(q, fab, status, acc, scenario)})
     return {"rows": rows}

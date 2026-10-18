@@ -54,6 +54,7 @@ class TWGRConfig:
     quarantine: bool = True         # False: naive best effort (owner copy, else any copy)
     copy_votes: bool = False        # True: plain replica-majority voting (copies vote for themselves)
     min_support: int = 2            # distinct domains that must support the accepted digest
+    authenticate: bool = False      # TWGR-S: origin signatures + derivation dominance (needs a manifest)
 
 
 @dataclass
@@ -65,6 +66,7 @@ class RunParams:
     alpha: float
     cap: int
     bet_cap: float = 0.5
+    manifest: dict = None           # published run manifest {run_id, devices: {worker: pubkey}} (TWGR-S)
 
 
 def prf_key(run_key, j, k):
@@ -232,6 +234,107 @@ def support(items, digest):
     return len({d for d, dg, _ in items if dg == digest})
 
 
+# ---------------------------------------------------------------- authenticity (TWGR-S)
+SIGNED = ("Candidate", "Result")                    # evidence that originates at a device
+DERIVED = ("Lease", "Allocation", "Key", "Confirmation")  # always recomputed, never trusted from storage
+MAX_UNSIGNED = 12                                   # unsigned crashes a confirmation may depend on
+
+
+def admissible(node, accepted, params):
+    """'signed' if node carries a valid origin signature, 'unsigned-crash' if it is an
+    unsigned crash result (conservative by construction), else None."""
+    from fresco.hkg import sign as sg
+    man = params.manifest or {}
+    devices, run_id = man.get("devices", {}), man.get("run_id")
+    p = node.payload
+    try:
+        if node.type == "Candidate":
+            if set(p) != sg.CANDIDATE_KEYS:              # nothing unsigned may ride along
+                return None
+            pub = devices.get(p.get("worker"))
+            return "signed" if pub and sg.verify(pub, p.get("sig"), sg.request_msg(run_id, p)) else None
+        if node.type == "Result":
+            if p.get("sig") is None:
+                return "unsigned-crash" if p == {"crashed": True} else None
+            if set(p) not in sg.RESULT_KEYS:
+                return None
+            j, k = node.key.rsplit(":", 1)
+            cand = accepted.get(("Candidate", j))
+            pub = devices.get(p.get("worker"))
+            if cand is None or pub is None or p.get("worker") != cand.payload.get("worker"):
+                return None
+            outcome = "crashed" if p.get("crashed") else p.get("y")
+            if outcome not in (0, 1, "crashed"):
+                return None
+            msg = sg.result_msg(run_id, j, int(k), outcome, sg.request_hash(cand.payload),
+                                prf_key(params.run_key, j, int(k)))
+            return "signed" if sg.verify(pub, p.get("sig"), msg) else None
+    except (AttributeError, TypeError, ValueError):
+        return None
+    return None
+
+
+def _schema_edges(node):
+    """The edge structure of a signed record is fixed by its type and id: relation name
+    and target id are rebuilt; only the target digest is taken from the copy."""
+    if node.type == "Result":
+        j = node.key.rsplit(":", 1)[0]
+        return [("for", "Candidate", j), ("key", "Key", node.key), ("lease", "SlotLease", node.key)]
+    if node.type == "Candidate":
+        return [("funded_by", "Lease", str(node.payload.get("lease")))]
+    return []
+
+
+def normalise_edges(node, accepted):
+    """Edges in schema order; each digest from the accepted target, else from the copy,
+    else the edge is omitted (an optional edge, or an unrecoverable target)."""
+    stored = {tt: td for _, tt, _, td in node.edges}
+    edges = []
+    for rel, tt, tk in _schema_edges(node):
+        td = accepted[(tt, tk)].digest() if (tt, tk) in accepted else stored.get(tt)
+        if td is not None:
+            edges.append((rel, tt, tk, td))
+    return Node(node.type, node.key, node.payload, node.owner, tuple(edges))
+
+
+def decide_signed(fabric, nid, copies, accepted, params):
+    """Authenticity comes from the origin signature, not from votes: an adversary holding
+    any number of coordinator domains cannot make a forged value admissible. Two
+    distinct signed values for one id mean the device equivocated: quarantine."""
+    by_payload = defaultdict(list)                    # signed content -> normalised admissible copies
+    kind = {}
+    for n in copies.values():
+        a = admissible(n, accepted, params)
+        if a is not None:
+            key = canon(n.payload)
+            kind[key] = a
+            by_payload[key].append(normalise_edges(n, accepted))
+    signed = [k for k, a in kind.items() if a == "signed"]
+    if len(signed) > 1:
+        return QUARANTINED, None
+    chosen = signed[0] if signed else next((k for k, a in kind.items() if a == "unsigned-crash"), None)
+    if chosen is None:
+        return QUARANTINED, None
+    # edges are not signed: they are rebuilt from accepted neighbours; any edge whose
+    # target is unverifiable keeps the value most copies agree on
+    pick = Counter(n.encode() for n in by_payload[chosen]).most_common(1)[0][0]
+    pick = Node.decode(pick)
+    clean = all(n.encode() == pick.encode() for n in copies.values()) and len(copies) == len(fabric.placement(pick))
+    return (VERIFIED if clean else REPAIRED), pick
+
+
+def decide_derived(fabric, nid, copies, derived):
+    """Derivation dominance: a derivable record is exactly its derivation from accepted
+    inputs; stored copies and votes can never override it."""
+    if derived is None:
+        return QUARANTINED, None
+    dg = derived.digest()
+    if copies and all(n.digest() == dg for n in copies.values()) and len(copies) == len(fabric.placement(derived)):
+        return VERIFIED, derived
+    agree = any(n.digest() == dg for n in copies.values())
+    return (REPAIRED if agree else RECONSTRUCTED), derived
+
+
 # ---------------------------------------------------------------- derivations
 class Deriver:
     def __init__(self, params, accepted):
@@ -245,7 +348,7 @@ class Deriver:
                 return make_lease(int(k), self.p)
             if t == "Allocation":
                 cand = self.acc.get(("Candidate", k))
-                if cand is None:
+                if cand is None or cand.payload["lease"] in getattr(self, "overspent", ()):
                     return None
                 lease = self.acc.get(("Lease", cand.payload["lease"]))
                 return make_allocation(cand, lease) if lease is not None else None
@@ -268,10 +371,12 @@ def twgr(fabric, params, cfg=None, heal=True):
     status, accepted = {}, {}
     der = Deriver(params, accepted)
     for t in TYPE_ORDER:
+        if cfg.authenticate and t == "Allocation":
+            der.overspent = overspent_leases(accepted, params)
         for nid in sorted(i for i in ids if i[0] == t):
             if t == "Confirmation":
                 continue                       # handled below from verified inputs
-            st, node = decide(fabric, nid, cfg, rev, logs, der)
+            st, node = decide(fabric, nid, cfg, rev, logs, der, params=params)
             status[nid] = st
             if node is not None:
                 accepted[nid] = node
@@ -280,7 +385,8 @@ def twgr(fabric, params, cfg=None, heal=True):
     # Confirmations: accept a stored copy only if anchored; otherwise re-derive from
     # verified allocation + results (quarantined results count as Y = 0).
     for nid in sorted(i for i in ids if i[0] == "Confirmation"):
-        st, node = decide(fabric, nid, cfg, rev, logs, der, derive_fn=lambda n: derive_confirmation(n, accepted, params))
+        st, node = decide(fabric, nid, cfg, rev, logs, der, params=params,
+                          derive_fn=lambda n: derive_confirmation(n, accepted, params, robust=cfg.authenticate))
         status[nid] = st
         if node is not None:
             accepted[nid] = node
@@ -289,7 +395,38 @@ def twgr(fabric, params, cfg=None, heal=True):
     return status, accepted
 
 
-def derive_confirmation(nid, accepted, params):
+def overspent_leases(accepted, params):
+    """Leases funding more distinct signed requests than their size (only possible if a
+    compromised Treasurer granted one lease twice): all their candidates become
+    unconfirmable, so sum a_j <= eps holds over what can be confirmed."""
+    from fresco.hkg.sign import request_hash
+    reqs = defaultdict(set)
+    for (t, _), n in accepted.items():
+        if t == "Candidate":
+            reqs[n.payload.get("lease")].add(request_hash(n.payload))
+    return {lease for lease, r in reqs.items() if len(r) > params.lease_size}
+
+
+def robust_confirmed(alloc, results, params):
+    """Confirmed for every assignment of the unsigned crash slots to {0, 1}. The true
+    sequence is one of these assignments, so a robust confirmation was also made by the
+    original run, whatever an adversary substituted (the e-process is not monotone in
+    individual outcomes, so setting them to 0 is not enough)."""
+    import itertools
+    free = [i for i, r in enumerate(results[:params.cap]) if r is not None and r.payload.get("sig") is None]
+    if len(free) > MAX_UNSIGNED:
+        return False
+    base = [r.payload.get("y") if r is not None else None for r in results]
+    for bits in itertools.product((0, 1), repeat=len(free)):
+        ys = list(base)
+        for i, b in zip(free, bits):
+            ys[i] = b
+        if not evaluate_confirmation(alloc, ys, params.alpha, params.cap, params.bet_cap)[3]:
+            return False
+    return True
+
+
+def derive_confirmation(nid, accepted, params, robust=False):
     cand = accepted.get(("Candidate", nid[1]))
     alloc = accepted.get(("Allocation", nid[1]))
     if cand is None or alloc is None:
@@ -302,15 +439,23 @@ def derive_confirmation(nid, accepted, params):
             break
         results.append(r)
         k += 1
-    return make_confirmation(cand, alloc, results, params)
+    conf = make_confirmation(cand, alloc, results, params)
+    if robust and conf.payload["confirmed"] and not robust_confirmed(alloc, results, params):
+        conf = Node(conf.type, conf.key, {**conf.payload, "confirmed": False}, conf.owner, conf.edges)
+    return conf
 
 
 def _known_slot(accepted, j, k):
     return ("SlotLease", f"{j}:{k}") in accepted
 
 
-def decide(fabric, nid, cfg, rev, logs, der, derive_fn=None):
+def decide(fabric, nid, cfg, rev, logs, der, derive_fn=None, params=None):
     copies, items = collect(fabric, nid, cfg, rev, logs)
+    if cfg.authenticate:
+        if nid[0] in SIGNED:
+            return decide_signed(fabric, nid, copies, der.acc, params)
+        if nid[0] in DERIVED:
+            return decide_derived(fabric, nid, copies, derive_fn(nid) if derive_fn else der.derive(nid))
     if not cfg.quarantine:                       # naive best effort
         owner = TYPE_OWNER[nid[0]]
         node = copies.get(owner) or next(iter(copies.values()), None)

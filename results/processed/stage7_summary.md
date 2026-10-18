@@ -207,5 +207,17 @@ Injection outcome (judge): NOT_EXPOSED 81, IGNORED 16, ATTEMPTED_FAILED 0, EXECU
 | HIJACKED ⇒ injected text was seen | 0 | – | – |
 | MALFORMED_CALL ⇒ a tool call returned an error | 0 | – | – |
 
-Stability: 2 re-judgements at T = 0.7 (3 per episode) agree with the T = 0 verdict on the failure category in 1.00 of cases.
+Stability: 45 re-judgements at T = 0.7 (3 per episode) agree with the T = 0 verdict on the failure category in 0.78 of cases.
+
+### What the agent did instead of calling a tool (144 no-tool episodes)
+
+| behaviour | judge | rule classifier |
+|---|---|---|
+| ASKS_USER | 84 | 78 |
+| TEXT_TOOL_CALL | 10 | 12 |
+| CLAIMED_ACTION | 20 | 14 |
+| PLAN_ONLY | 30 | 12 |
+| OTHER | 0 | 28 |
+
+Judge and rule classifier agree on 0.62 of no-tool episodes (ASKS_USER κ = 0.72, TEXT_TOOL_CALL κ = 0.41, CLAIMED_ACTION κ = 0.20, PLAN_ONLY κ = 0.30, OTHER κ = 0.00).
 

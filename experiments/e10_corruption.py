@@ -16,7 +16,7 @@ import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from experiments.common import run_jobs  # noqa: E402
+from experiments.common import run_jobs_streaming  # noqa: E402
 from fresco.hkg.corrupt import corrupt_fabric  # noqa: E402
 from fresco.hkg.graph import DOMAINS, DomainStore  # noqa: E402
 from fresco.hkg.repair import QUARANTINED, RunParams, TWGRConfig, report, twgr  # noqa: E402
@@ -116,4 +116,4 @@ if __name__ == "__main__":
     runs = int(sys.argv[1]) if len(sys.argv) > 1 else 40
     jobs = [(one, {"scenario": s, "seed": r}, {"scenario": s, "seed": 10_000 + r})
             for s in SCENARIOS for r in range(runs)]
-    run_jobs("e10_corruption", jobs)
+    run_jobs_streaming("e10_corruption", jobs)

@@ -22,7 +22,7 @@ import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from experiments.common import run_jobs  # noqa: E402
+from experiments.common import run_jobs_streaming  # noqa: E402
 from experiments.e10_corruption import PARAMS, SCENARIOS, VARIANTS  # noqa: E402
 from fresco.hkg.corrupt import tamper_node  # noqa: E402
 from fresco.hkg.graph import DOMAINS, Node, canon, nid_str, sha  # noqa: E402
@@ -103,4 +103,4 @@ def one(cfg):
 
 if __name__ == "__main__":
     runs = int(sys.argv[1]) if len(sys.argv) > 1 else 20
-    run_jobs("e11_adversary", [(one, {"seed": r}, {"seed": 20_000 + r}) for r in range(runs)])
+    run_jobs_streaming("e11_adversary", [(one, {"seed": r}, {"seed": 20_000 + r}) for r in range(runs)])

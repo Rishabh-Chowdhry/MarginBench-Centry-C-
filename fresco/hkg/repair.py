@@ -346,8 +346,15 @@ def heal_copies(fabric, node):
 
 
 def report(accepted):
-    """Final report computed only from accepted records: confirmed levels and b_hat."""
-    confirmed = [(int(n.payload["level"]), n.key) for nid, n in accepted.items()
-                 if nid[0] == "Confirmation" and n.payload.get("confirmed")]
+    """Final report computed only from accepted records: confirmed levels and b_hat.
+    A malformed confirmation (possible only under the best-effort baseline) counts as
+    unconfirmed."""
+    confirmed = []
+    for nid, n in accepted.items():
+        if nid[0] == "Confirmation" and n.payload.get("confirmed") is True:
+            try:
+                confirmed.append((int(n.payload["level"]), n.key))
+            except (KeyError, TypeError, ValueError):
+                pass
     b_hat = min((lv for lv, _ in confirmed), default=None)
     return {"b_hat": b_hat, "confirmed": sorted(confirmed)}

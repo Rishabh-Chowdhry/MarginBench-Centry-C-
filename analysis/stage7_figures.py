@@ -287,12 +287,43 @@ def e13():
     b = [r for r in ok if not r["violation"]]
     md.append(f"{len(ok)} episodes ({len(rows) - len(ok)} errors); violations {len(v)} "
               f"({wilson(len(v), len(ok))[0]:.3f}, 95% CI [{wilson(len(v), len(ok))[1]:.3f}, {wilson(len(v), len(ok))[2]:.3f}]).\n")
+    u = [r for r in ok if r["utility"]]
+    f = [r for r in ok if not r["utility"]]
+    md.append(f"Authorized-task completion (utility) {len(u)}/{len(ok)} ({wilson(len(u), len(ok))[0]:.3f}, "
+              f"95% CI [{wilson(len(u), len(ok))[1]:.3f}, {wilson(len(u), len(ok))[2]:.3f}]).\n")
+    rowsl = []
+    for name, grp in (("violation", v), ("benign", b), ("task completed", u), ("task not completed", f)):
+        if grp:
+            x = np.array([r["latency_s"] for r in grp])
+            rowsl.append([name, len(x), f"{np.median(x):.1f}", f"{x.mean():.1f}", f"{np.quantile(x, 0.9):.1f}"])
+    table(["outcome", "episodes", "median latency (s)", "mean (s)", "p90 (s)"], rowsl)
+    for suite in sorted({r["suite"] for r in ok}):
+        g = [r for r in ok if r["suite"] == suite]
+        md.append(f"- {suite}: {len(g)} episodes, violations {sum(r['violation'] for r in g)}, "
+                  f"utility {sum(r['utility'] for r in g)}")
+    md.append("")
+    if u and f:
+        lu, lf = np.array([r["latency_s"] for r in u]), np.array([r["latency_s"] for r in f])
+        trows = []
+        for tau in sorted({float(np.quantile(np.r_[lu, lf], q)) for q in (0.5, 0.75, 0.9)}):
+            trows.append([f"{tau:.0f}", f"{np.mean(lu > tau):.2f}", f"{np.mean(lf > tau):.2f}"])
+        md.append("Outcome-dependent timeouts (the mechanism behind the fresh-retry default), measured on task "
+                  "completion because violations were too rare: P(latency > τ | outcome).\n")
+        table(["timeout τ (s)", "task completed", "task not completed"], trows)
+        fig, ax = plt.subplots(figsize=(6, 3.6))
+        bins = np.linspace(0, max(lu.max(), lf.max()), 25)
+        ax.hist(lf, bins=bins, color="#eb6834", alpha=0.7, label="task not completed")
+        ax.hist(lu, bins=bins, color="#2a78d6", alpha=0.7, label="task completed")
+        if v:
+            ax.plot([r["latency_s"] for r in v], [0.3] * len(v), "v", color="#d1335b", label="violation")
+        ax.set(title="Real AgentDojo episodes: latency by outcome", xlabel="episode latency (s)", ylabel="episodes")
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig(FIG / "fig15_agentdojo_latency.png", dpi=160)
+        plt.close(fig)
     if not v or not b:
         return
     lv, lb = np.array([r["latency_s"] for r in v]), np.array([r["latency_s"] for r in b])
-    table(["outcome", "episodes", "median latency (s)", "mean (s)", "p90 (s)"],
-          [["violation", len(lv), f"{np.median(lv):.1f}", f"{lv.mean():.1f}", f"{np.quantile(lv, 0.9):.1f}"],
-           ["benign", len(lb), f"{np.median(lb):.1f}", f"{lb.mean():.1f}", f"{np.quantile(lb, 0.9):.1f}"]])
     p = len(v) / len(ok)
     trows = []
     taus = sorted({float(np.quantile(np.r_[lv, lb], q)) for q in (0.5, 0.75, 0.9)})
@@ -305,15 +336,6 @@ def e13():
               "violation rate becomes p(1−c₁)/(p(1−c₁)+(1−p)(1−c₀)).\n")
     table(["timeout τ (s)", "P(timeout | violation) c₁", "P(timeout | benign) c₀", "true p", "observed p with retry",
            "ratio"], trows)
-    fig, ax = plt.subplots(figsize=(6, 3.6))
-    bins = np.linspace(0, max(lv.max(), lb.max()), 25)
-    ax.hist(lb, bins=bins, color="#2a78d6", alpha=0.7, label="benign")
-    ax.hist(lv, bins=bins, color="#d1335b", alpha=0.7, label="violation")
-    ax.set(title="Real AgentDojo episodes: latency by outcome", xlabel="episode latency (s)", ylabel="episodes")
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(FIG / "fig15_agentdojo_latency.png", dpi=160)
-    plt.close(fig)
 
 
 def main():

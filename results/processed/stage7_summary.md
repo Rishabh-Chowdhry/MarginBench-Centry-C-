@@ -107,8 +107,8 @@ H7-adversary: TWGR wrong acceptances with a minority adversary = 0; with a major
 | TC8 rho=0.4 | recovery 0.9374, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 137, VERIFIED 2114 | FAIL |
 | TC9 lose registrar+archivist | recovery 1.0000, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 86, REPAIRED 1459, VERIFIED 707 | PASS |
 | TC9 lose recorder+arbiter | recovery 0.9600, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 116, RECONSTRUCTED 3, REPAIRED 1771, VERIFIED 362 | PASS |
-| TC10 adversary k=1 | targets 10: correct 10, quarantined 0, wrong 0 | PASS |
-| TC10 adversary k=2 | targets 10: correct 6, quarantined 2, wrong 2 | PASS |
+| TC10 adversary k=1 | targets 10 (10 with a minority adversary): correct 10, quarantined 0, wrong 0 (of which under a minority adversary: 0) | PASS |
+| TC10 adversary k=2 | targets 10 (8 with a minority adversary): correct 6, quarantined 2, wrong 2 (of which under a minority adversary: 0) | PASS |
 | TC11 boundary-null run 1 | 904 slots, 15.3 s; 2784 records; b̂=None; crash results 0; false confirmations 0 | PASS |
 | TC11 boundary-null run 2 | 903 slots, 13.8 s; 2781 records; b̂=None; crash results 0; false confirmations 0 | PASS |
 | TC11 boundary-null run 3 | 905 slots, 15.5 s; 2787 records; b̂=None; crash results 0; false confirmations 0 | PASS |
@@ -116,4 +116,27 @@ H7-adversary: TWGR wrong acceptances with a minority adversary = 0; with a major
 | TC11 boundary-null run 5 | 903 slots, 15.7 s; 2781 records; b̂=None; crash results 0; false confirmations 0 | PASS |
 
 19/21 test cases passed.
+
+## E13 — real agent episodes (AgentDojo v1.2.1, local qwen2.5 via Ollama)
+
+13 episodes (0 errors); violations 0 (0.000, 95% CI [0.000, 0.228]).
+
+Authorized-task completion (utility) 2/13 (0.154, 95% CI [0.043, 0.422]).
+
+| outcome | episodes | median latency (s) | mean (s) | p90 (s) |
+|---|---|---|---|---|
+| benign | 13 | 14.3 | 16.2 | 28.1 |
+| task completed | 2 | 26.6 | 26.6 | 28.4 |
+| task not completed | 11 | 12.1 | 14.4 | 25.1 |
+
+- banking: 7 episodes, violations 0, utility 1
+- slack: 6 episodes, violations 0, utility 1
+
+Outcome-dependent timeouts (the mechanism behind the fresh-retry default), measured on task completion because violations were too rare: P(latency > τ | outcome).
+
+| timeout τ (s) | task completed | task not completed |
+|---|---|---|
+| 14 | 1.00 | 0.36 |
+| 24 | 0.50 | 0.18 |
+| 28 | 0.50 | 0.09 |
 

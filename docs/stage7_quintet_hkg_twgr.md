@@ -181,14 +181,73 @@ TWGR is one ordered pass followed by one confirmation pass, so no iteration to a
 
 Each rule's state has exactly one writer, and cross-coordinator reads touch only write-once records. So the per-owner linearizable implementations compose without coordination, and the manuscript's validity theorems apply. ∎
 
+## 4b. Closing the quorum gap: TWGR-S (added after the loophole report)
+**The loophole.** Theorem 2 holds only under the quorum condition of Theorem 1. E11 confirmed the tightness remark in its worst form. An adversary holding a majority of a record's anchor domains made plain TWGR accept forged Confirmations in 324 of 324 attacks, so **repair added false confirmations**. No voting rule can avoid this, because whoever holds the majority writes the majority. The fix is to make authenticity independent of votes for every record on the evidence path.
+
+**TWGR-S** changes four things.
+1. **Origin signatures.** The executor device that produces evidence signs it with Ed25519:
+   - its registration request: lease, level, content, worker, nonce, and its index within its own lease;
+   - every slot outcome: run id, j, k, y, the hash of the signed request, and the PRF key of the slot.
+
+   The device public keys, the run id, the budget policy and the commitment to κ are in a run manifest published before the run, outside every coordinator domain. A record is admissible only if:
+   - its payload consists of exactly the signed fields, in strict encoding;
+   - it verifies under the manifest key of the candidate's own device;
+   - its edges are rebuilt from the schema and from neighbours already accepted.
+
+   Two distinct signed values for one id mean the device equivocated, and the record is quarantined.
+2. **Derivation dominance.** Lease, Allocation, Key and Confirmation are always recomputed from accepted inputs. Neither stored copies nor votes can override a derivation. If the inputs are missing, the record is quarantined.
+3. **Only crashes may be unsigned, and their value is unknown.** A slot that expired without a result becomes an unsigned crash (Y = 0). A confirmation, whether at run time or when re-derived, is valid only if it holds **for every 0/1 assignment of its unsigned crash slots** (at most 12 such slots). This makes the guarantee independent of whether the plug-in betting e-process is monotone in individual outcomes. No counterexample to monotonicity turned up in 600,000 random single flips, but nothing proves it either.
+4. **Lease overspend.** A lease funding more distinct signed requests than its size is unconfirmable.
+
+The live Arbiter, the record writers and every re-derivation use this same confirmation rule.
+
+**Assumptions.**
+- (S1) The manifest is published before the run and is not under the adversary's control.
+- (S2) Ed25519 is existentially unforgeable, and device keys are not compromised.
+- (S3) Devices are honest: a device signs only the outcome it observed, and at most one outcome per slot (it keeps a device-local write-once log of signed slots).
+- (S4) The adversary controls **any subset of the five coordinator domains, including all of them**, and can read, delete, rewrite and re-anchor everything stored there.
+
+**Theorem 3 (no added confirmation without a quorum).** Under S1–S4, let 𝒞 be the set of candidates the original run confirmed on the true outcomes and 𝒞ₛ the set the TWGR-S report confirms. Then:
+- (i) every accepted Candidate and Result carries genuine device-signed content, or is an unsigned crash;
+- (ii) every accepted Lease, Allocation, Key and Confirmation equals its derivation from accepted records;
+- (iii) 𝒞ₛ ⊆ 𝒞, and Σ aⱼ over confirmable candidates is at most ε.
+
+Hence P(false confirmation in the TWGR-S report) ≤ ε (Theorem 1 of the manuscript), whatever the adversary does to the coordinators.
+
+*Proof.*
+- **(i)** Admissibility requires a valid signature over exactly the stored payload. Producing one for content the device did not sign breaks S2. The only unsigned value admitted is the payload {crashed: true}. The signature binds j, k, the request hash and the PRF key, so a signed outcome cannot be moved to another slot, another candidate or another run.
+- **(ii)** Holds by construction.
+- **(iii)** Fix a candidate j and let T be its true outcome sequence, with expired slots counted as 0.
+  - The repaired sequence Y′ agrees with T on every signed slot: by (i) and S3 there is one genuine signed value per slot.
+  - Y′ differs from T only at unsigned-crash positions U, or by ending early where Results and SlotLeases were deleted.
+  - Ending early: e-process decisions are determined by the prefix (the first crossing), so a confirmation on a prefix of T is also the original decision.
+  - Missing consumed results: the derivation does not confirm.
+  - Positions in U inside T's length: the robust rule requires confirmation for every assignment of U, which includes T restricted to U.
+  - Positions in U beyond T's end: these include the all-zero assignment. A zero outcome never raises the wealth of a betting e-process with non-negative bets, so the crossing must lie within T.
+  - In every case, confirmation of Y′ implies confirmation of T. The allocation equals the true aⱼ by (i) and (ii), and the Arbiter's decision is a deterministic function of (aⱼ, T). Hence j ∈ 𝒞.
+  - Budget: leases are derived from public policy, and each lease funds at most lease_size distinct signed requests, otherwise its candidates are unconfirmable. So Σ aⱼ ≤ Σₙ ε/(n(n+1)) ≤ ε. ∎
+
+**What the adversary can still do.**
+- Delete, withhold or delay evidence. This causes quarantine and lost power, never a false confirmation.
+- Replace signed outcomes with crashes. This can only prevent confirmations.
+- Alter bookkeeping records that no reported quantity depends on: Grant, SlotLease and Frontier. Frontier affects only scheduling and pruning.
+
+Theorem 1's quorum bound still governs those records and availability.
+
+**What remains out of scope.**
+- Compromised device keys, and dishonest devices that lie about their own slots. This is oracle integrity, like a compromised sandbox, and each such device affects only its own slots.
+- A compromised manifest.
+
 ## 5. Threat model of the security layer
 **Covered:**
 - random storage corruption of any kind and at any rate;
 - crash and loss of whole domains, as long as a majority of anchor domains survives for each record;
 - an adversary controlling a minority of the anchor domains of a record.
 
+**Covered by TWGR-S (§4b):** an adversary controlling any number of coordinator domains, up to all five, cannot add a confirmation.
+
 **Not covered:**
-- an adversary controlling a majority of a record's anchor domains (Theorem 1 is tight);
+- for plain TWGR: an adversary controlling a majority of a record's anchor domains (Theorem 1 is tight). TWGR-S closes this for every record on the evidence path, and only bookkeeping records remain quorum-dependent;
 - compromise of the run key κ;
 - corruption of the executor's *observation* before it is recorded. That is oracle integrity, not storage integrity.
 

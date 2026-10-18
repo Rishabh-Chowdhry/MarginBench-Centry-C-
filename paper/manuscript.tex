@@ -292,6 +292,23 @@ Under the condition of Theorem~\ref{thm:nofab} for every record, the set of cand
 A confirmed record is accepted either as an anchored copy, which by Theorem~\ref{thm:nofab} is the Arbiter's original record, or as a re-derivation. A re-derivation may confirm only if every consumed Result was accepted; it then recomputes the Arbiter's e-process on inputs equal to the original ones and reaches the same decision. Without this guard, a corruption that removes chosen Results would feed the plug-in betting e-process, which is not monotone in individual outcomes, a sequence it never saw.
 \end{proof}
 
+\paragraph{The quorum gap and TWGR-S.} The tightness of Theorem~\ref{thm:nofab} is a real loophole. An adversary holding a majority of a record's anchor domains can make TWGR accept a forged Confirmation, so repair \emph{adds} a false confirmation. Experiment E11 shows this happening in every such attack. No voting rule avoids it, so TWGR-S removes votes from the evidence path entirely. It changes four things:
+\begin{enumerate}
+\item \emph{Origin signatures.} The executor device signs its registration request and each slot outcome with Ed25519. The outcome signature binds run, $j$, $k$, $y$, the request hash and the slot's PRF key. Device public keys are in a run manifest published before the run, outside every coordinator domain. A record is admissible only if its payload consists exactly of the signed fields, in strict encoding, under the key of the candidate's own device. Edges are rebuilt from the schema and the accepted neighbours, and two signed values for one slot are quarantined.
+\item \emph{Derivation dominance.} Lease, Allocation, Key and Confirmation are always recomputed from accepted inputs, never taken from storage or votes.
+\item \emph{Unsigned means unknown.} The only unsigned evidence is a crash result ($Y=0$). Every confirmation, live or re-derived, must hold for \emph{every} 0/1 assignment of its unsigned crash slots (at most 12).
+\item \emph{Lease overspend.} A lease that funds more signed requests than its size is unconfirmable.
+\end{enumerate}
+
+\begin{theorem}[No added confirmation without a quorum]\label{thm:twgrs}
+Assume the manifest is published before the run, Ed25519 is unforgeable and device keys are secret, and devices sign only what they observe and at most one outcome per slot. Let an adversary control any subset of the five coordinator domains, including all of them. Then every confirmation in the TWGR-S report was also made by the original run on the true outcomes, and the confirmable weights satisfy $\sum_j a_j\le\varepsilon$. Hence the false-confirmation probability of the reported result is at most $\varepsilon$.
+\end{theorem}
+\begin{proof}[Proof sketch]
+Admissible Candidates and Results are genuine, since anything else breaks unforgeability, or they are unsigned crashes. Derived records equal their derivations. The repaired outcome sequence of a candidate agrees with the true sequence $T$ on signed slots. It can differ only at unsigned-crash positions $U$, or by ending early. A confirmation on a prefix of $T$ is the original decision, because e-process decisions depend only on the first crossing. Missing consumed results prevent confirmation. Inside $T$'s length, the robust rule covers the assignment $T|_U$. Beyond $T$'s end, the rule covers the all-zero assignment, and zero outcomes never raise the wealth of a non-negative bettor. Weights come from public policy and per-lease request counts. Full proof: Stage~7 notes, \S4b.
+\end{proof}
+
+What the adversary can still do is delete, withhold or delay evidence, and replace outcomes by crashes. Each of these costs power, never validity. It can also alter bookkeeping records (Grant, SlotLease, Frontier) on which no reported quantity depends. Compromised device keys, or dishonest devices, remain oracle-integrity failures outside the model.
+
 \begin{proposition}[Recovery and cost]\label{prop:recovery}
 Record $x$ is recovered exactly if $2b(x)<m(x)$, at least two domains hold evidence for $d(x)$, and either one copy is intact or $x$ is derivable from recovered inputs. Under independent corruption with probability $\rho$ per stored item, a non-derivable record with $c$ copies fails with probability at most $\rho^{c}+\Pr(\mathrm{Bin}(m,\rho)\ge\lceil m/2\rceil)$. TWGR takes one pass in $O(S+E+J\cdot\mathrm{cap})$ time and $O(S+E)$ space for $S$ stored items, $E$ edges and $J$ candidates.
 \end{proposition}

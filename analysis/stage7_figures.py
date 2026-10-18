@@ -27,9 +27,9 @@ from experiments.common import RAW, load  # noqa: E402
 FIG = ROOT / "figures"
 OUT = ROOT / "results" / "processed"
 EPS = 0.05
-VCOL = {"TWGR": "#2a78d6", "-replicas": "#7fb2ea", "-log anchors": "#1baf7a", "-edge anchors": "#8fd6b9",
+VCOL = {"TWGR": "#2a78d6", "TWGR-S": "#0b0b0b", "-replicas": "#7fb2ea", "-log anchors": "#1baf7a", "-edge anchors": "#8fd6b9",
         "-derivation": "#eda100", "item votes": "#9a6fd6", "TWGR support-1": "#52514e",
-        "replica-majority": "#eb6834", "best-effort": "#d1335b", "single-coordinator": "#0b0b0b"}
+        "replica-majority": "#eb6834", "best-effort": "#d1335b", "single-coordinator": "#8a8984"}
 ORDER = list(VCOL)
 md = []
 
@@ -211,35 +211,59 @@ def e10():
 def e11():
     rows = [r for job in load("e11_adversary") for r in job["rows"]]
     md.append("## E11 — coordinated adversary controlling k domains\n")
-    md.append("b = compromised domains among the m domains holding anchors for the target. Theorem 1: no wrong "
-              "acceptance while 2b ≤ m (honest anchor domains not outnumbered).\n")
+    md.append("An adversary controlling k of the five domains rewrites one target consistently in every copy, "
+              "anchor-log entry (re-chained) and edge it holds. b = compromised domains among the m domains holding "
+              "anchors for the target; *majority* means 2b > m. *Unsafe wrong* = a wrong accepted value other than an "
+              "unsigned crash (a crash can only weaken evidence). *Added* = confirmations in the repaired report that "
+              "the original run did not make. TWGR-S (signed evidence, derivation dominance) was added after the "
+              "majority-adversary loophole was reported; it is not preregistered.\n")
+    attacks = sorted({r["attack"] for r in rows})
+    variants = [v for v in ("TWGR", "TWGR-S", "replica-majority") if any(r["variant"] == v for r in rows)]
     trows = []
-    fig, ax = plt.subplots(figsize=(6.5, 3.8))
-    for v, col in (("TWGR", VCOL["TWGR"]), ("replica-majority", VCOL["replica-majority"])):
-        xs, ys = [], []
+    for v in variants:
+        for a in attacks:
+            for maj in (0, 1):
+                rr = [r for r in rows if r["variant"] == v and r["attack"] == a and r["majority"] == maj]
+                if not rr:
+                    continue
+                unsafe = sum(r["wrong"] and not r["conservative"] for r in rr)
+                trows.append([v, a, "majority" if maj else "minority", len(rr), unsafe,
+                              sum(r["conservative"] for r in rr), sum(r["added_conf"] > 0 for r in rr),
+                              sum(r["quarantined"] for r in rr), sum(r["correct"] for r in rr)])
+    table(["variant", "attack", "adversary", "attacks", "unsafe wrong", "conservative (crash)",
+           "attacks adding a confirmation", "quarantined", "correct"], trows)
+    fig, axs = plt.subplots(1, 2, figsize=(11, 3.8))
+    cols = {"TWGR": VCOL["TWGR"], "TWGR-S": "#0b0b0b", "replica-majority": VCOL["replica-majority"]}
+    for v in variants:
+        xs, w, ad = [], [], []
         for b in range(0, 6):
             rr = [r for r in rows if r["variant"] == v and r["b"] == b]
-            if not rr:
-                continue
-            w = sum(r["wrong"] for r in rr)
-            xs.append(b)
-            ys.append(w / len(rr))
-            maj = sum(r["majority"] for r in rr)
-            trows.append([v, b, len(rr), maj, w, sum(r["wrong"] for r in rr if not r["majority"]),
-                          sum(r["quarantined"] for r in rr), sum(r["correct"] for r in rr)])
-        ax.plot(xs, ys, "-", color=col, label=v, **MK)
-    table(["variant", "b", "attacks", "of which 2b > m", "wrong accepted", "wrong with 2b ≤ m", "quarantined",
-           "correct"], trows)
-    tw_min = sum(r["wrong"] for r in rows if r["variant"] == "TWGR" and not r["majority"])
-    tw_maj = sum(r["wrong"] for r in rows if r["variant"] == "TWGR" and r["majority"])
-    md.append(f"H7-adversary: TWGR wrong acceptances with a minority adversary = {tw_min}; with a majority = {tw_maj}. "
-              f"{verdict(tw_min == 0 and tw_maj > 0)}\n")
-    ax.set(title="Coordinated adversary: wrong value accepted", xlabel="compromised anchor domains b",
-           ylabel="fraction of attacks", ylim=(-0.03, 1.03))
-    ax.legend()
+            if rr:
+                xs.append(b)
+                w.append(np.mean([bool(r["wrong"] and not r["conservative"]) for r in rr]))
+                ad.append(np.mean([r["added_conf"] > 0 for r in rr if r["attack"] == "tamper-confirmation"] or [0]))
+        axs[0].plot(xs, w, "-", color=cols[v], label=v, **MK)
+        axs[1].plot(xs, ad, "-", color=cols[v], label=v, **MK)
+    axs[0].set(title="Unsafe wrong value accepted", xlabel="compromised anchor domains b", ylabel="fraction of attacks",
+               ylim=(-0.03, 1.03))
+    axs[1].set(title="Forged confirmations: repair adds a false one", xlabel="compromised anchor domains b",
+               ylabel="fraction of attacks", ylim=(-0.03, 1.03))
+    axs[0].legend()
     fig.tight_layout()
     fig.savefig(FIG / "fig13_adversary.png", dpi=160)
     plt.close(fig)
+    tw = [r for r in rows if r["variant"] == "TWGR"]
+    tw_min = sum(r["wrong"] for r in tw if not r["majority"] and not r["conservative"])
+    tw_maj = sum(r["wrong"] for r in tw if r["majority"])
+    md.append(f"H7-adversary (preregistered, plain TWGR): unsafe wrong acceptances with a minority adversary = {tw_min}; "
+              f"wrong acceptances with a majority = {tw_maj}. {verdict(tw_min == 0 and tw_maj > 0)}\n")
+    ts = [r for r in rows if r["variant"] == "TWGR-S"]
+    if ts:
+        unsafe = sum(r["wrong"] and not r["conservative"] for r in ts)
+        added = sum(r["added_conf"] > 0 for r in ts)
+        md.append(f"TWGR-S (post hoc): over {len(ts)} attacks, {sum(r['majority'] for r in ts)} of them by a majority "
+                  f"adversary (up to all five domains): unsafe wrong acceptances = {unsafe}, attacks that added a "
+                  f"confirmation = {added}, conservative substitutions accepted = {sum(r['conservative'] for r in ts)}.\n")
 
 
 def e12():
@@ -264,9 +288,9 @@ def e12():
         if "scan1" in r:
             detail.append("scan " + ", ".join(f"{k} {v}" for k, v in sorted(r["scan1"].items())))
         if "wrong" in r:
-            detail.append(f"targets {r['targets']} ({r.get('minority_targets', '?')} with a minority adversary): correct "
-                          f"{r['correct']}, quarantined {r['quarantined']}, wrong {r['wrong']} "
-                          f"(of which under a minority adversary: {r.get('wrong_minority', '?')})")
+            detail.append(f"targets {r['targets']} ({r.get('majority_targets', '?')} with a majority adversary): correct "
+                          f"{r['correct']}, quarantined {r['quarantined']}, wrong {r['wrong']}, "
+                          f"added confirmations {r.get('added_conf', '?')}")
         if "false_confirmations" in r:
             detail.append(f"false confirmations {r['false_confirmations']}")
         if "worker_conflict_responses" in r:

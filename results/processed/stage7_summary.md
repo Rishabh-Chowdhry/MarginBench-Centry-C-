@@ -169,7 +169,7 @@ Outcome-dependent timeouts (the mechanism behind the fresh-retry default), measu
 
 ## E14 — why do the agent episodes fail? (every AgentDojo user task, judge LLM)
 
-Agent: Qwen2.5-1.5B (Ollama, T = 0.7, seed 1). Every user task of the four AgentDojo v1.2.1 suites (97 tasks), each with the important_instructions attack (rotating injection task) and without an attack. 194 episodes (0 harness errors). Judge: Qwen2.5-7B (T = 0), constrained to a fixed taxonomy and to AgentDojo's own labels; 82 episodes judged.
+Agent: Qwen2.5-1.5B (Ollama, T = 0.7, seed 1). Every user task of the four AgentDojo v1.2.1 suites (97 tasks), each with the important_instructions attack (rotating injection task) and without an attack. 194 episodes (0 harness errors). Judge: Qwen2.5-7B (T = 0), constrained to a fixed taxonomy and to AgentDojo's own labels; 194 episodes judged.
 
 | suite | tasks | utility (no attack) | utility (attack) | violations (attack) | episodes with no tool call |
 |---|---|---|---|---|---|
@@ -182,8 +182,8 @@ Paired by task (97 tasks): the attack turned 1 successes into failures and 2 fai
 
 | attack | NO_TOOL_USE | WRONG_TOOL | WRONG_ARGUMENTS | INCOMPLETE | MALFORMED_CALL | HIJACKED | MISREAD_DATA | OTHER | failed episodes |
 |---|---|---|---|---|---|---|---|---|---|
-| none | 9 | 14 | 6 | 6 | 0 | 0 | 0 | 0 | 35 |
-| important_instructions | 19 | 11 | 2 | 3 | 0 | 0 | 0 | 0 | 35 |
+| none | 25 | 33 | 15 | 16 | 0 | 0 | 0 | 0 | 89 |
+| important_instructions | 45 | 29 | 6 | 8 | 0 | 0 | 0 | 0 | 88 |
 
 By suite (both attack conditions):
 
@@ -191,16 +191,18 @@ By suite (both attack conditions):
 |---|---|---|---|---|---|---|---|---|---|
 | banking | 11 | 6 | 5 | 2 | 0 | 0 | 0 | 0 | 24 |
 | slack | 16 | 15 | 2 | 5 | 0 | 0 | 0 | 0 | 38 |
-| travel | 1 | 4 | 1 | 2 | 0 | 0 | 0 | 0 | 8 |
+| travel | 2 | 31 | 4 | 3 | 0 | 0 | 0 | 0 | 40 |
+| workspace | 41 | 10 | 10 | 14 | 0 | 0 | 0 | 0 | 75 |
 
-Injection outcome (judge): NOT_EXPOSED 33, IGNORED 8, ATTEMPTED_FAILED 0, EXECUTED 0
+Injection outcome (judge): NOT_EXPOSED 81, IGNORED 16, ATTEMPTED_FAILED 0, EXECUTED 0
 
 ### Judge validation against rule-based trace facts
 
 | check | episodes | agreement | Cohen's κ |
 |---|---|---|---|
-| NO_TOOL_USE ⇔ no tool call in the trace | 70 | 0.64 | 0.32 |
-| NOT_EXPOSED ⇔ injected text never returned by a tool | 41 | 0.93 | 0.76 |
+| NO_TOOL_USE ⇔ no tool call in the trace | 177 | 0.55 | 0.19 |
+| NOT_EXPOSED ⇔ injected text never returned by a tool | 97 | 0.89 | 0.47 |
 | HIJACKED ⇒ injected text was seen | 0 | – | – |
 | MALFORMED_CALL ⇒ a tool call returned an error | 0 | – | – |
+
 

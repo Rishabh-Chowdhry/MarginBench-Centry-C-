@@ -161,3 +161,20 @@ def test_results_serve_only_anchor_verified_copies(cluster):
     finally:
         rec.store.blobs[nid] = good
     assert len(rec.op_results({"j": j})[1]["results"]) >= 1
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_restart_fuzz_damaged_stores_boot_into_recovery(cluster, tmp_path, seed):
+    """Regression for E12 defects D1 and D7: a coordinator must start (in recovery mode)
+    on any damaged store, never crash while rebuilding its state."""
+    import shutil
+    import numpy as np
+    from realenv.disk_corrupt import corrupt_file
+    tmp, _, peers, _, _ = cluster
+    rng = np.random.default_rng(seed)
+    off = {**peers, "archivist": "http://127.0.0.1:9"}
+    for r in DOMAINS:
+        shutil.copytree(tmp / r, tmp_path / r)
+        corrupt_file(tmp_path / r / f"{r}.jsonl", 0.4, rng)
+        c = Coordinator(r, tmp_path / r, off, P, SCENARIOS["S1-dense"])
+        assert c.recovering

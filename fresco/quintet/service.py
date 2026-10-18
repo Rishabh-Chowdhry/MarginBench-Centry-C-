@@ -171,14 +171,9 @@ class Coordinator:
 
     # ------------------------------------------------------------ state rebuild
     def _nodes(self, t):
-        out = []
-        for nid, b in self.store.blobs.items():
-            if nid[0] == t:
-                try:
-                    out.append(Node.decode(b))
-                except ValueError:
-                    pass
-        return out
+        """Anchor-verified local records of type t (state is never rebuilt from damaged
+        copies; E12 defect D7)."""
+        return [n for n in (self.verified(nid) for nid in list(self.store.blobs) if nid[0] == t) if n is not None]
 
     def _rebuild(self):
         """Counters come from records present locally and from the Archivist's anchor
@@ -213,7 +208,7 @@ class Coordinator:
         for (lease, i), _ in self.funded.items():
             self.lease_use[lease] = max(self.lease_use.get(lease, 0), i)
         self.b_hat = min((n.payload["b_hat"] for n in self._nodes("Frontier")), default=None)
-        self.frontier_seq = max((int(n.key) for n in self._nodes("Frontier")), default=0)
+        self.frontier_seq = max(num(("Frontier",)), default=0)
 
     def _resync(self):
         """After a restart the in-memory replication queues are gone: re-offer owned

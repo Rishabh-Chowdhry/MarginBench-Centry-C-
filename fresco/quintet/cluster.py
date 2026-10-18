@@ -24,7 +24,7 @@ import numpy as np
 from fresco.hkg import sign as sg
 from fresco.hkg.graph import Fabric, Node, sha, canon
 from fresco.hkg.repair import (RunParams, evaluate_confirmation, make_allocation, make_confirmation,
-                               make_key, make_lease)
+                               make_key, make_lease, robust_confirmed)
 
 
 @dataclass
@@ -120,8 +120,10 @@ class Quintet:
         alloc = self.nodes[("Allocation", j)]
         ys = [r.payload.get("y") for r in self.results[j]]
         n, _, _, ok = evaluate_confirmation(alloc, ys, self.p.alpha, self.p.cap, self.p.bet_cap)
+        if ok and not robust_confirmed(alloc, self.results[j], self.p):
+            ok = False                         # same rule as the audit: unsigned crash slots are unknown
         if ok or n >= self.p.cap:
-            conf = self._write(make_confirmation(cand, alloc, self.results[j], self.p))
+            conf = self._write(make_confirmation(cand, alloc, self.results[j], self.p, robust=True))
             self.status[j] = "CONFIRMED" if ok else "CAPPED"
             level = cand.payload["level"]
             if ok and level < self.b_hat:

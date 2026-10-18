@@ -106,7 +106,7 @@ def evaluate_confirmation(alloc, results, alpha, cap, bet_cap=0.5):
     return ep.trials, ep.successes, round(ep.max_log_e, 9), False
 
 
-def make_confirmation(cand, alloc, result_nodes, params):
+def make_confirmation(cand, alloc, result_nodes, params, robust=False):
     """Confirmation record from the in-order results. A missing (quarantined) result
     counts as Y = 0, and a decision of `confirmed` is only allowed when every
     consumed result is present: repair can therefore never add a confirmation
@@ -115,6 +115,8 @@ def make_confirmation(cand, alloc, result_nodes, params):
     n, s, mle, ok = evaluate_confirmation(alloc, ys, params.alpha, params.cap, params.bet_cap)
     if ok and any(r is None for r in result_nodes[:n]):
         ok = False
+    if ok and robust and not robust_confirmed(alloc, result_nodes, params):
+        ok = False                              # TWGR-S: unsigned crash slots are unknown, not 0
     edges = [("weight", "Allocation", alloc.key, alloc.digest()), ("for", "Candidate", cand.key, cand.digest())]
     for r in result_nodes[:n]:
         if r is not None:
@@ -386,7 +388,7 @@ def twgr(fabric, params, cfg=None, heal=True):
     # verified allocation + results (quarantined results count as Y = 0).
     for nid in sorted(i for i in ids if i[0] == "Confirmation"):
         st, node = decide(fabric, nid, cfg, rev, logs, der, params=params,
-                          derive_fn=lambda n: derive_confirmation(n, accepted, params, robust=cfg.authenticate))
+                          derive_fn=lambda n: derive_confirmation(n, accepted, params, robust=True))
         status[nid] = st
         if node is not None:
             accepted[nid] = node
@@ -439,10 +441,7 @@ def derive_confirmation(nid, accepted, params, robust=False):
             break
         results.append(r)
         k += 1
-    conf = make_confirmation(cand, alloc, results, params)
-    if robust and conf.payload["confirmed"] and not robust_confirmed(alloc, results, params):
-        conf = Node(conf.type, conf.key, {**conf.payload, "confirmed": False}, conf.owner, conf.edges)
-    return conf
+    return make_confirmation(cand, alloc, results, params, robust=robust)
 
 
 def _known_slot(accepted, j, k):

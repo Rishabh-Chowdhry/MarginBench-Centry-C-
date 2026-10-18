@@ -141,3 +141,18 @@ def test_quintet_single_writer_per_type(run):
         owners.setdefault(n.type, set()).add(n.owner)
     assert all(len(v) == 1 for v in owners.values())
     assert set().union(*owners.values()) <= set(DOMAINS) - {"archivist"}
+
+
+def test_derivation_verified_record_is_stable(run):
+    """A record whose anchors are all lost but whose copies equal its exact derivation is
+    VERIFIED (by derivation), so repeated scans converge to no further repairs."""
+    fab = fresh(run)
+    nid = next(i for i in fab.truth if i[0] == "Key")
+    for st in fab.stores.values():
+        st.log = [ln for ln in st.log if f'"{nid[0]}:{nid[1]}"' not in ln]
+        for oid in list(st.blobs):
+            if oid[0] == "Result" and oid[1] == nid[1]:
+                del st.blobs[oid]
+    twgr(fab, P)
+    status, _ = twgr(fab, P)
+    assert status[nid] == VERIFIED

@@ -186,11 +186,14 @@ class Coordinator:
                 ids |= {parse_id(i) for i in call(self.peers["archivist"], "/ids", timeout=3).get("ids", [])}
             except Unavailable:
                 pass
-        num = lambda t: [int(k) for tt, k in ids if tt == t and k.isdigit()]  # noqa: E731
-        self.n_leases = max(num("Lease"), default=0)
-        self.next_j = max(num("Candidate"), default=0) + 1
+        # counters cover every record type keyed by the id, so a record lost from all
+        # domains but survived by a neighbour never has its id reused (E12 defect D5)
+        num = lambda ts: [int(k) for tt, k in ids if tt in ts and k.isdigit()]  # noqa: E731
+        self.n_leases = max(num(("Lease", "Grant")), default=0)
+        self.next_j = max(num(("Candidate", "Allocation", "Confirmation"))
+                          + [int(j) for j, _ in self._slots(ids, ("SlotLease", "Key", "Result"))], default=0) + 1
         self.next_k = {}
-        for j, kk in self._slots(ids):
+        for j, kk in self._slots(ids, ("SlotLease", "Key", "Result")):
             self.next_k[j] = max(self.next_k.get(j, 1), kk + 1)
         if self.role == "recorder":               # open slots resume their expiry clock after a restart
             for j, kk in self._slots(ids):
@@ -232,11 +235,11 @@ class Coordinator:
             self._enqueue("arbiter", "/arbitrate", {"j": j})
 
     @staticmethod
-    def _slots(ids):
-        """Well-formed SlotLease ids as (j, k); ids garbled by storage faults are skipped
-        (E12 defect D1: a bit flip inside an id used to crash the restart)."""
+    def _slots(ids, types=("SlotLease",)):
+        """Well-formed slot ids (j, k) of the given types; ids garbled by storage faults
+        are skipped (E12 defect D1: a bit flip inside an id used to crash the restart)."""
         for tt, key in ids:
-            if tt == "SlotLease":
+            if tt in types:
                 j, _, kk = key.rpartition(":")
                 if j.isdigit() and kk.isdigit():
                     yield j, int(kk)

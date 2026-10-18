@@ -124,3 +124,22 @@ def test_damaged_restart_waits_for_repair(cluster, tmp_path):
     assert code == 503
     c.op("/recovered", {})
     assert not c.recovering
+
+
+def test_counters_never_reuse_ids_of_surviving_neighbours(cluster, tmp_path):
+    """Regression for E12 defect D5: the next slot index must account for Results and
+    Keys, not only SlotLeases (a lost SlotLease must not let its index be reused)."""
+    _, _, peers, coords, _ = cluster
+    ids = {("Result", "7:5"), ("Key", "7:6"), ("Candidate", "9"), ("Lease", "3")}
+    c = coords["recorder"]
+    saved, saved_peers = c.store, c.peers
+    try:
+        from fresco.hkg.graph import DomainStore
+        c.peers = {**peers, "archivist": "http://127.0.0.1:9"}     # local evidence only
+        c.store = DomainStore("recorder")
+        c.store.blobs = {i: b"x" for i in ids}
+        c._rebuild()
+        assert c.next_k["7"] == 7 and c.next_j >= 10
+    finally:
+        c.store, c.peers = saved, saved_peers
+        c._rebuild()

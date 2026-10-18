@@ -334,7 +334,10 @@ def decide(fabric, nid, cfg, rev, logs, der, derive_fn=None):
         return QUARANTINED, None
     # no anchored majority: a derivation from verified inputs is exact by construction
     if derived is not None:
-        agree = any(n.digest() == derived.digest() for n in copies.values())
+        dg = derived.digest()
+        if copies and all(n.digest() == dg for n in copies.values()) and len(copies) == len(fabric.placement(derived)):
+            return VERIFIED, derived           # verified by exact derivation (its anchors may be lost)
+        agree = any(n.digest() == dg for n in copies.values())
         return (REPAIRED if agree else RECONSTRUCTED), derived
     return QUARANTINED, None
 

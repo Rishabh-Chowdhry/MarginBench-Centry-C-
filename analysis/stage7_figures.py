@@ -67,7 +67,7 @@ def e10():
     md.append(f"{len({(r['scenario'], r['seed']) for r in rows})} QUINTET runs "
               f"({', '.join(sorted({r['scenario'] for r in rows}))}); every variant repairs the identical corrupted "
               "fabric (paired). Recovery = fraction of records accepted with exactly their true bytes. "
-              "Wrong = accepted non-confirmation records whose bytes differ from the truth (summed over runs). "
+              "Wrong = accepted non-confirmation records whose content (payload) differs from the truth (summed over runs); a record with right content but different link bytes counts as not recovered, not as wrong. "
               "Added = confirmations reported after repair that the original run did not make.\n")
     hdr = ["variant"] + [f"ρ={x:g}" for x in rhos]
     table(hdr, [[v] + [f"{np.mean([r['recovery'] for r in by[(v, x)]]):.4f}" for x in rhos] for v in variants])
@@ -235,20 +235,25 @@ def e11():
     fig, axs = plt.subplots(1, 2, figsize=(11, 3.8))
     cols = {"TWGR": VCOL["TWGR"], "TWGR-S": "#0b0b0b", "replica-majority": VCOL["replica-majority"]}
     for v in variants:
-        xs, w, ad = [], [], []
+        xs, w, xa, ad = [], [], [], []
         for b in range(0, 6):
             rr = [r for r in rows if r["variant"] == v and r["b"] == b]
             if rr:
                 xs.append(b)
                 w.append(np.mean([bool(r["wrong"] and not r["conservative"]) for r in rr]))
-                ad.append(np.mean([r["added_conf"] > 0 for r in rr if r["attack"] == "tamper-confirmation"] or [0]))
+            rc = [r for r in rr if r["attack"] == "tamper-confirmation"]
+            if rc:                                    # only bins that contain such attacks
+                xa.append(b)
+                ad.append(np.mean([r["added_conf"] > 0 for r in rc]))
         axs[0].plot(xs, w, "-", color=cols[v], label=v, **MK)
-        axs[1].plot(xs, ad, "-", color=cols[v], label=v, **MK)
+        axs[1].plot(xa, ad, "-", color=cols[v], label=v, **MK)
     axs[0].set(title="Unsafe wrong value accepted", xlabel="compromised anchor domains b", ylabel="fraction of attacks",
                ylim=(-0.03, 1.03))
     axs[1].set(title="Forged confirmations: repair adds a false one", xlabel="compromised anchor domains b",
                ylabel="fraction of attacks", ylim=(-0.03, 1.03))
     axs[0].legend()
+    for ax in axs:
+        ax.set_xticks(range(0, 6))
     fig.tight_layout()
     fig.savefig(FIG / "fig13_adversary.png", dpi=160)
     plt.close(fig)

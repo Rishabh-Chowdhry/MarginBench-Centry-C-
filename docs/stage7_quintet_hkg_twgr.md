@@ -338,10 +338,25 @@ Counting votes per item instead of per domain made no difference under random co
 
 None of the three accepted a wrong record. The two-domain support rule costs availability when domains are lost. Requiring support from one domain (an exploratory variant, not preregistered) removes that cost, and it had 0 wrong records in E10 as well. However, Theorem 1 does not need the rule, and E11 did not test the variant.
 
-**E11 (coordinated adversary; 1,800 attacks).**
-- Full TWGR accepted a wrong value in **0 of 810 attacks where the compromised domains were at most half of the target's anchor domains**, and in all 990 attacks where they were a strict majority. This is exactly the bound of Theorem 1 and its tightness remark.
-- In the 2b = m tie cases, TWGR quarantined the record (114 attacks).
-- Replica-majority accepted the wrong value in 134 attacks with a minority adversary, all with b = 2.
+**E11 (coordinated adversary; final run with TWGR-S; 2,700 attacks per method, 1,512 of them by a majority of the target's anchor domains).**
+
+Attack types:
+- forged Results (0 → 1);
+- forged Confirmations (→ confirmed);
+- retargeted Candidates;
+- inflated Leases;
+- suppressed results (a signed 1 replaced by a crash).
+
+Findings:
+- **Plain TWGR** accepted no forgery from a minority adversary, and every forgery from a majority (1,512/1,512). That included all 327 forged Confirmations, so **repair added false confirmations**: the loophole.
+- **TWGR-S** accepted **0 forged values and added 0 confirmations in all 2,700 attacks**, including adversaries in four or all five domains. A majority adversary could only destroy evidence: targets were quarantined, or 183 suppressions were accepted (a signed violation became a crash).
+- **Replica-majority** added false confirmations even with a minority adversary (36 attacks).
+
+The table is in `results/processed/stage7_summary.md`.
+
+**E10 with TWGR-S.**
+- 0 wrong records and 0 added confirmations at every ρ.
+- Exact recovery 0.998, 0.963 and 0.732 at ρ = 0.1, 0.3 and 0.6, against 0.999, 0.979 and 0.807 for TWGR. Signed evidence costs recovery, because whatever cannot be authenticated or recomputed is quarantined.
 
 **Preregistered verdicts:**
 
@@ -353,14 +368,13 @@ None of the three accepted a wrong record. The two-domain support rule costs ava
 | H7-baselines | supported, all three parts |
 | H7-validity | supported |
 | H7-power | supported (b̂ = k* in 100% of S1 runs at ρ ≤ 0.2) |
-| H7-adversary | supported |
+| H7-adversary | supported (plain TWGR fails exactly beyond the quorum) |
+| H7-S (post hoc) | supported: TWGR-S, 0 forgeries, 0 added confirmations in 2,700 attacks |
 
 ## 9. Results — real controlled environment (E12) and real agents (E13)
 **E12.** The full report is in `realenv/RESULTS.md`.
-- The final campaign run passed 19 of 21 test cases, and no storage-fault case accepted a wrong record.
-- The two failures:
-  - a power miss in TC1 (b̂ = 4);
-  - a convergence criterion at ρ = 0.4, where the second scan recovered one more record.
+- The final campaign run (run 11; signed evidence, TWGR-S) passed **24 of 24** test cases, including adversaries in up to all five domains.
+- Run 8, with plain TWGR, passed 19 of 21; the two failures were a power miss and a convergence criterion.
 - The campaign found **seven defects in the networked service (D1–D7)**, and all are fixed. Four were integrity defects, and all four share one root cause: *a coordinator trusted its own local storage after a fault*. They led to the **repair-before-serve** and **anchor-verified reads** principles. None of these defects was in TWGR.
 
 **E13.** Setup: AgentDojo v1.2.1 (banking and Slack suites), the `important_instructions` attack, and Qwen2.5-1.5B served by Ollama on CPU. 60 episodes (12 task pairs × 5 seeds) were run in a fixed order. The data are in `results/raw/e13_agentdojo.jsonl` and `e13_replay.jsonl`.

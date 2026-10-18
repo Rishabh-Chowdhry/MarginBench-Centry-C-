@@ -2,34 +2,36 @@
 
 ## E10 — TWGR under independent storage corruption
 
-80 QUINTET runs (S1-dense, boundary-null); every variant repairs the identical corrupted fabric (paired). Recovery = fraction of records accepted with exactly their true bytes. Wrong = accepted non-confirmation records whose bytes differ from the truth (summed over runs). Added = confirmations reported after repair that the original run did not make.
+80 QUINTET runs (S1-dense, boundary-null); every variant repairs the identical corrupted fabric (paired). Recovery = fraction of records accepted with exactly their true bytes. Wrong = accepted non-confirmation records whose content (payload) differs from the truth (summed over runs); a record with right content but different link bytes counts as not recovered, not as wrong. Added = confirmations reported after repair that the original run did not make.
 
 | variant | ρ=0 | ρ=0.01 | ρ=0.05 | ρ=0.1 | ρ=0.2 | ρ=0.3 | ρ=0.45 | ρ=0.6 |
 |---|---|---|---|---|---|---|---|---|
-| TWGR | 1.0000 | 1.0000 | 0.9999 | 0.9993 | 0.9940 | 0.9788 | 0.9224 | 0.8036 |
-| -replicas | 1.0000 | 0.9933 | 0.9661 | 0.9303 | 0.8515 | 0.7640 | 0.6161 | 0.4507 |
-| -log anchors | 0.9801 | 0.9801 | 0.9799 | 0.9786 | 0.9697 | 0.9476 | 0.8828 | 0.7628 |
-| -edge anchors | 1.0000 | 1.0000 | 0.9997 | 0.9975 | 0.9791 | 0.9295 | 0.7697 | 0.5124 |
-| -derivation | 1.0000 | 1.0000 | 0.9999 | 0.9989 | 0.9910 | 0.9689 | 0.8900 | 0.7360 |
-| item votes | 1.0000 | 1.0000 | 0.9999 | 0.9993 | 0.9940 | 0.9789 | 0.9228 | 0.8042 |
-| TWGR support-1 | 1.0000 | 1.0000 | 0.9999 | 0.9993 | 0.9941 | 0.9796 | 0.9262 | 0.8144 |
-| replica-majority | 1.0000 | 0.9998 | 0.9958 | 0.9834 | 0.9361 | 0.8632 | 0.7126 | 0.5330 |
-| best-effort | 1.0000 | 0.9964 | 0.9819 | 0.9624 | 0.9168 | 0.8614 | 0.7549 | 0.6160 |
-| single-coordinator | 1.0000 | 0.9737 | 0.8725 | 0.7576 | 0.5547 | 0.3939 | 0.2128 | 0.0973 |
+| TWGR | 1.0000 | 1.0000 | 0.9999 | 0.9993 | 0.9940 | 0.9790 | 0.9234 | 0.8070 |
+| TWGR-S | 1.0000 | 1.0000 | 0.9998 | 0.9982 | 0.9882 | 0.9629 | 0.8812 | 0.7319 |
+| -replicas | 1.0000 | 0.9933 | 0.9661 | 0.9303 | 0.8515 | 0.7642 | 0.6173 | 0.4531 |
+| -log anchors | 0.9801 | 0.9801 | 0.9799 | 0.9787 | 0.9704 | 0.9491 | 0.8863 | 0.7693 |
+| -edge anchors | 1.0000 | 1.0000 | 0.9997 | 0.9976 | 0.9791 | 0.9295 | 0.7696 | 0.5126 |
+| -derivation | 1.0000 | 1.0000 | 0.9999 | 0.9989 | 0.9910 | 0.9693 | 0.8919 | 0.7412 |
+| item votes | 1.0000 | 1.0000 | 0.9999 | 0.9993 | 0.9940 | 0.9791 | 0.9236 | 0.8073 |
+| TWGR support-1 | 1.0000 | 1.0000 | 0.9999 | 0.9993 | 0.9941 | 0.9797 | 0.9272 | 0.8178 |
+| replica-majority | 1.0000 | 0.9998 | 0.9957 | 0.9830 | 0.9351 | 0.8612 | 0.7093 | 0.5281 |
+| best-effort | 1.0000 | 0.9964 | 0.9815 | 0.9615 | 0.9150 | 0.8591 | 0.7515 | 0.6123 |
+| single-coordinator | 1.0000 | 0.9737 | 0.8725 | 0.7576 | 0.5547 | 0.3939 | 0.2128 | 0.0974 |
 
 Wrong accepted non-confirmation records (total) / added confirmations (total):
 
 | variant | ρ=0 | ρ=0.01 | ρ=0.05 | ρ=0.1 | ρ=0.2 | ρ=0.3 | ρ=0.45 | ρ=0.6 |
 |---|---|---|---|---|---|---|---|---|
 | TWGR | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| TWGR-S | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
 | -replicas | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
 | -log anchors | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
 | -edge anchors | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
 | -derivation | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
 | item votes | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
 | TWGR support-1 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
-| replica-majority | 0 / 0 | 21 / 0 | 349 / 5 | 1698 / 15 | 7951 / 59 | 20393 / 131 | 56134 / 355 | 114568 / 673 |
-| best-effort | 0 / 0 | 2616 / 9 | 13305 / 54 | 27450 / 124 | 59448 / 292 | 96297 / 515 | 161710 / 858 | 238663 / 1269 |
+| replica-majority | 0 / 0 | 21 / 0 | 338 / 5 | 1639 / 15 | 7496 / 59 | 18832 / 132 | 50694 / 352 | 102288 / 673 |
+| best-effort | 0 / 0 | 2174 / 9 | 11267 / 54 | 23153 / 124 | 50509 / 292 | 81302 / 516 | 136249 / 853 | 200828 / 1272 |
 | single-coordinator | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
 
 Boundary-null runs: fraction of runs with ≥ 1 false confirmation after repair (Wilson 95% CI), ε = 0.05:
@@ -37,6 +39,7 @@ Boundary-null runs: fraction of runs with ≥ 1 false confirmation after repair 
 | variant | ρ=0 | ρ=0.01 | ρ=0.05 | ρ=0.1 | ρ=0.2 | ρ=0.3 | ρ=0.45 | ρ=0.6 |
 |---|---|---|---|---|---|---|---|---|
 | TWGR | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] |
+| TWGR-S | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] |
 | -replicas | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] |
 | -log anchors | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] |
 | -edge anchors | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] | 0/40 [0.00, 0.09] |
@@ -52,6 +55,7 @@ Boundary-null runs: fraction of runs with ≥ 1 false confirmation after repair 
 | variant | 1 domain(s) lost | 2 domain(s) lost | 3 domain(s) lost |
 |---|---|---|---|
 | TWGR | 1.0000 (wrong 0, added 0) | 0.9750 (wrong 0, added 0) | 0.7539 (wrong 0, added 0) |
+| TWGR-S | 1.0000 (wrong 0, added 0) | 0.9858 (wrong 0, added 0) | 0.7613 (wrong 0, added 0) |
 | TWGR support-1 | 1.0000 (wrong 0, added 0) | 1.0000 (wrong 0, added 0) | 0.9103 (wrong 0, added 0) |
 | replica-majority | 1.0000 (wrong 0, added 0) | 1.0000 (wrong 0, added 0) | 0.8973 (wrong 0, added 0) |
 
@@ -60,9 +64,9 @@ Boundary-null runs: fraction of runs with ≥ 1 false confirmation after repair 
 | hypothesis | result | verdict |
 |---|---|---|
 | H7-safe | TWGR wrong non-confirmation records = 0, added confirmations = 0, phantoms = 0 over 640 repairs | **supported** |
-| H7-recover | ρ=0: 1.0000, ρ=0.01: 1.0000, ρ=0.05: 0.9999, ρ=0.1: 0.9993, ρ=0.2: 0.9940, ρ=0.3: 0.9788, ρ=0.45: 0.9224, ρ=0.6: 0.8036 | **supported** |
-| H7-ablate | -replicas: Δ=0.2148 [0.2134, 0.2162]; -log anchors: Δ=0.0312 [0.0298, 0.0327]; -edge anchors: Δ=0.0493 [0.0488, 0.0499]; -derivation: Δ=0.0099 [0.0097, 0.0101]; item votes: Δ=-0.0001 [-0.0001, -0.0001] | **not supported** (-replicas: yes, -log anchors: yes, -edge anchors: yes, -derivation: yes, item votes: no) |
-| H7-baselines (replica-majority wrong at ρ≥0.1) | ρ=0.1: 1698, ρ=0.2: 7951, ρ=0.3: 20393, ρ=0.45: 56134, ρ=0.6: 114568 | **supported** |
+| H7-recover | ρ=0: 1.0000, ρ=0.01: 1.0000, ρ=0.05: 0.9999, ρ=0.1: 0.9993, ρ=0.2: 0.9940, ρ=0.3: 0.9790, ρ=0.45: 0.9234, ρ=0.6: 0.8070 | **supported** |
+| H7-ablate | -replicas: Δ=0.2147 [0.2134, 0.2162]; -log anchors: Δ=0.0299 [0.0285, 0.0314]; -edge anchors: Δ=0.0495 [0.0489, 0.0501]; -derivation: Δ=0.0097 [0.0095, 0.0100]; item votes: Δ=-0.0001 [-0.0001, -0.0001] | **not supported** (-replicas: yes, -log anchors: yes, -edge anchors: yes, -derivation: yes, item votes: no) |
+| H7-baselines (replica-majority wrong at ρ≥0.1) | ρ=0.1: 1639, ρ=0.2: 7496, ρ=0.3: 18832, ρ=0.45: 50694, ρ=0.6: 102288 | **supported** |
 | H7-baselines (best-effort false-conf > ε at ρ≥0.1) | ρ=0.1: 32/40 [0.65, 0.90], ρ=0.2: 39/40 [0.87, 1.00], ρ=0.3: 40/40 [0.91, 1.00], ρ=0.45: 40/40 [0.91, 1.00], ρ=0.6: 40/40 [0.91, 1.00] | **supported** (point estimates; Wilson lower bound > ε at all ρ: yes) |
 | H7-baselines (single-coordinator recovery ≤ 0.5 at ρ=0.3) | 0.3939 | **supported** |
 | H7-validity | ρ=0: 0/40, ρ=0.01: 0/40, ρ=0.05: 0/40, ρ=0.1: 0/40, ρ=0.2: 0/40, ρ=0.3: 0/40, ρ=0.45: 0/40, ρ=0.6: 0/40 | **supported** |
@@ -70,52 +74,75 @@ Boundary-null runs: fraction of runs with ≥ 1 false confirmation after repair 
 
 ## E11 — coordinated adversary controlling k domains
 
-b = compromised domains among the m domains holding anchors for the target. Theorem 1: no wrong acceptance while 2b ≤ m (honest anchor domains not outnumbered).
+An adversary controlling k of the five domains rewrites one target consistently in every copy, anchor-log entry (re-chained) and edge it holds. b = compromised domains among the m domains holding anchors for the target; *majority* means 2b > m. *Unsafe wrong* = a wrong accepted value other than an unsigned crash (a crash can only weaken evidence). *Added* = confirmations in the repaired report that the original run did not make. TWGR-S (signed evidence, derivation dominance) was added after the majority-adversary loophole was reported; it is not preregistered.
 
-| variant | b | attacks | of which 2b > m | wrong accepted | wrong with 2b ≤ m | quarantined | correct |
-|---|---|---|---|---|---|---|---|
-| TWGR | 0 | 82 | 0 | 0 | 0 | 0 | 82 |
-| TWGR | 1 | 429 | 0 | 0 | 0 | 0 | 429 |
-| TWGR | 2 | 437 | 138 | 138 | 0 | 114 | 185 |
-| TWGR | 3 | 444 | 444 | 444 | 0 | 0 | 0 |
-| TWGR | 4 | 288 | 288 | 288 | 0 | 0 | 0 |
-| TWGR | 5 | 120 | 120 | 120 | 0 | 0 | 0 |
-| replica-majority | 0 | 82 | 0 | 0 | 0 | 0 | 82 |
-| replica-majority | 1 | 429 | 0 | 0 | 0 | 0 | 429 |
-| replica-majority | 2 | 437 | 138 | 272 | 134 | 0 | 165 |
-| replica-majority | 3 | 444 | 444 | 408 | 0 | 0 | 36 |
-| replica-majority | 4 | 288 | 288 | 288 | 0 | 0 | 0 |
-| replica-majority | 5 | 120 | 120 | 120 | 0 | 0 | 0 |
+| variant | attack | adversary | attacks | unsafe wrong | conservative (crash) | attacks adding a confirmation | quarantined | correct |
+|---|---|---|---|---|---|---|---|---|
+| TWGR | inflate-lease | minority | 120 | 0 | 0 | 0 | 0 | 120 |
+| TWGR | inflate-lease | majority | 180 | 180 | 0 | 0 | 0 | 0 |
+| TWGR | retarget-candidate | minority | 160 | 0 | 0 | 0 | 0 | 160 |
+| TWGR | retarget-candidate | majority | 240 | 240 | 0 | 0 | 0 | 0 |
+| TWGR | suppress-result | minority | 272 | 0 | 0 | 0 | 56 | 216 |
+| TWGR | suppress-result | majority | 328 | 0 | 328 | 0 | 0 | 0 |
+| TWGR | tamper-confirmation | minority | 273 | 0 | 0 | 0 | 0 | 273 |
+| TWGR | tamper-confirmation | majority | 327 | 327 | 0 | 327 | 0 | 0 |
+| TWGR | tamper-result | minority | 363 | 0 | 0 | 0 | 92 | 271 |
+| TWGR | tamper-result | majority | 437 | 437 | 0 | 0 | 0 | 0 |
+| TWGR-S | inflate-lease | minority | 120 | 0 | 0 | 0 | 0 | 120 |
+| TWGR-S | inflate-lease | majority | 180 | 0 | 0 | 0 | 0 | 180 |
+| TWGR-S | retarget-candidate | minority | 160 | 0 | 0 | 0 | 0 | 160 |
+| TWGR-S | retarget-candidate | majority | 240 | 0 | 0 | 0 | 119 | 121 |
+| TWGR-S | suppress-result | minority | 272 | 0 | 0 | 0 | 0 | 272 |
+| TWGR-S | suppress-result | majority | 328 | 0 | 183 | 0 | 0 | 145 |
+| TWGR-S | tamper-confirmation | minority | 273 | 0 | 0 | 0 | 0 | 273 |
+| TWGR-S | tamper-confirmation | majority | 327 | 0 | 0 | 0 | 0 | 327 |
+| TWGR-S | tamper-result | minority | 363 | 0 | 0 | 0 | 0 | 363 |
+| TWGR-S | tamper-result | majority | 437 | 0 | 0 | 0 | 235 | 202 |
+| replica-majority | inflate-lease | minority | 120 | 15 | 0 | 0 | 0 | 105 |
+| replica-majority | inflate-lease | majority | 180 | 162 | 0 | 0 | 0 | 18 |
+| replica-majority | retarget-candidate | minority | 160 | 23 | 0 | 0 | 0 | 137 |
+| replica-majority | retarget-candidate | majority | 240 | 215 | 0 | 0 | 0 | 25 |
+| replica-majority | suppress-result | minority | 272 | 0 | 47 | 0 | 0 | 225 |
+| replica-majority | suppress-result | majority | 328 | 0 | 314 | 0 | 0 | 14 |
+| replica-majority | tamper-confirmation | minority | 273 | 36 | 0 | 36 | 0 | 237 |
+| replica-majority | tamper-confirmation | majority | 327 | 327 | 0 | 327 | 0 | 0 |
+| replica-majority | tamper-result | minority | 363 | 71 | 0 | 0 | 0 | 292 |
+| replica-majority | tamper-result | majority | 437 | 414 | 0 | 0 | 0 | 23 |
 
-H7-adversary: TWGR wrong acceptances with a minority adversary = 0; with a majority = 990. **supported**
+H7-adversary (preregistered, plain TWGR): unsafe wrong acceptances with a minority adversary = 0; wrong acceptances with a majority = 1512. **supported**
+
+TWGR-S (post hoc): over 2700 attacks, 1512 of them by a majority adversary (up to all five domains): unsafe wrong acceptances = 0, attacks that added a confirmation = 0, conservative substitutions accepted = 183.
 
 ## E12 — SQA campaign on Docker devices (real network, process and storage faults)
 
 | test case | observations | verdict |
 |---|---|---|
-| TC1 baseline | 724 slots, 10.5 s; 2254 records; b̂=4; crash results 0 | FAIL |
-| TC2 latency | 360 slots, 38.1 s; 1126 records; b̂=4; crash results 0 | PASS |
-| TC3 timeouts+resets | 723 slots, 41.1 s; 2642 records; b̂=3; crash results 131 | PASS |
-| TC4 kill recorder | 724 slots, 24.2 s; 2260 records; b̂=3; crash results 3 | PASS |
-| TC5 pause arbiter | 722 slots, 30.2 s; 2249 records; b̂=3; crash results 2 | PASS |
-| TC6 partition treasurer | 721 slots, 23.4 s; 2247 records; b̂=3; crash results 127 | PASS |
-| TC7 kill 2 workers | 1201 slots, 25.5 s; 3992 records; b̂=3; crash results 2 | PASS |
-| TC8-golden | 723 slots, 9.5 s; 2252 records; b̂=3; crash results 0 | PASS |
-| TC8 rho=0.05 | recovery 0.9996, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 1, VERIFIED 2251 | PASS |
-| TC8 rho=0.2 | recovery 0.9929, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 17, REPAIRED 1, VERIFIED 2234 | PASS |
-| TC12 resume after storage repair | 240 slots, 4.6 s; 3012 records; b̂=3; crash results 0 | PASS |
-| TC8 rho=0.4 | recovery 0.9374, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 137, VERIFIED 2114 | FAIL |
-| TC9 lose registrar+archivist | recovery 1.0000, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 86, REPAIRED 1459, VERIFIED 707 | PASS |
-| TC9 lose recorder+arbiter | recovery 0.9600, wrong 0, added conf 0, lost conf 0; scan QUARANTINED 116, RECONSTRUCTED 3, REPAIRED 1771, VERIFIED 362 | PASS |
-| TC10 adversary k=1 | targets 10 (10 with a minority adversary): correct 10, quarantined 0, wrong 0 (of which under a minority adversary: 0) | PASS |
-| TC10 adversary k=2 | targets 10 (8 with a minority adversary): correct 6, quarantined 2, wrong 2 (of which under a minority adversary: 0) | PASS |
-| TC11 boundary-null run 1 | 904 slots, 15.3 s; 2784 records; b̂=None; crash results 0; false confirmations 0 | PASS |
-| TC11 boundary-null run 2 | 903 slots, 13.8 s; 2781 records; b̂=None; crash results 0; false confirmations 0 | PASS |
-| TC11 boundary-null run 3 | 905 slots, 15.5 s; 2787 records; b̂=None; crash results 0; false confirmations 0 | PASS |
-| TC11 boundary-null run 4 | 901 slots, 15.2 s; 2775 records; b̂=None; crash results 0; false confirmations 0 | PASS |
-| TC11 boundary-null run 5 | 903 slots, 15.7 s; 2781 records; b̂=None; crash results 0; false confirmations 0 | PASS |
+| TC1 baseline | 722 slots, 13.1 s; 2249 records; b̂=3; crash results 0 | PASS |
+| TC2 latency | 360 slots, 39.9 s; 1126 records; b̂=4; crash results 0 | PASS |
+| TC3 timeouts+resets | 720 slots, 48.0 s; 2613 records; b̂=4; crash results 122 | PASS |
+| TC4 kill recorder | 725 slots, 24.0 s; 2261 records; b̂=3; crash results 4 | PASS |
+| TC5 pause arbiter | 721 slots, 32.4 s; 2246 records; b̂=3; crash results 2 | PASS |
+| TC6 partition treasurer | 721 slots, 25.1 s; 2254 records; b̂=4; crash results 136 | PASS |
+| TC7 kill 2 workers | 1203 slots, 28.4 s; 4002 records; b̂=3; crash results 0 | PASS |
+| TC8-golden | 725 slots, 12.1 s; 2258 records; b̂=3; crash results 0 | PASS |
+| TC8 rho=0.05 | recovery 1.0000, wrong 0, links differ 0, added conf 0, lost conf 0; scan VERIFIED 2258 | PASS |
+| TC8 rho=0.2 | recovery 0.9929, wrong 0, links differ 0, added conf 0, lost conf 0; scan QUARANTINED 11, VERIFIED 2247 | PASS |
+| TC12 resume after storage repair | 240 slots, 4.4 s; 3014 records; b̂=3; crash results 0 | PASS |
+| TC8 rho=0.4 | recovery 0.9318, wrong 0, links differ 0, added conf 0, lost conf 2; scan QUARANTINED 141, VERIFIED 2117 | PASS |
+| TC9 lose registrar+archivist | recovery 1.0000, wrong 0, links differ 0, added conf 0, lost conf 0; scan QUARANTINED 37, REPAIRED 1612, VERIFIED 609 | PASS |
+| TC9 lose recorder+arbiter | recovery 1.0000, wrong 0, links differ 0, added conf 0, lost conf 0; scan QUARANTINED 36, REPAIRED 1905, VERIFIED 317 | PASS |
+| TC10 adversary k=1 | targets 10 (0 with a majority adversary): correct 10, content right/links missing 0, quarantined 0, wrong 0, added confirmations 0 | PASS |
+| TC10 adversary k=2 | targets 10 (0 with a majority adversary): correct 10, content right/links missing 0, quarantined 0, wrong 0, added confirmations 0 | PASS |
+| TC10 adversary k=3 | targets 10 (5 with a majority adversary): correct 10, content right/links missing 0, quarantined 0, wrong 0, added confirmations 0 | PASS |
+| TC10 adversary k=4 | targets 10 (10 with a majority adversary): correct 4, content right/links missing 2, quarantined 4, wrong 0, added confirmations 0 | PASS |
+| TC10 adversary k=5 | targets 10 (10 with a majority adversary): correct 2, content right/links missing 2, quarantined 6, wrong 0, added confirmations 0 | PASS |
+| TC11 boundary-null run 1 | 900 slots, 14.6 s; 2772 records; b̂=None; crash results 0; false confirmations 0 | PASS |
+| TC11 boundary-null run 2 | 903 slots, 14.4 s; 2781 records; b̂=None; crash results 0; false confirmations 0 | PASS |
+| TC11 boundary-null run 3 | 902 slots, 14.3 s; 2778 records; b̂=None; crash results 0; false confirmations 0 | PASS |
+| TC11 boundary-null run 4 | 904 slots, 15.2 s; 2784 records; b̂=None; crash results 0; false confirmations 0 | PASS |
+| TC11 boundary-null run 5 | 905 slots, 14.8 s; 2787 records; b̂=None; crash results 0; false confirmations 0 | PASS |
 
-19/21 test cases passed.
+24/24 test cases passed.
 
 ## E13 — real agent episodes (AgentDojo v1.2.1, local qwen2.5 via Ollama)
 

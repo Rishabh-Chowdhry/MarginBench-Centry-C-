@@ -86,7 +86,7 @@ Holm correction is **not** applied to non-inferiority, since each hypothesis is 
    - validity under arbitrary stopping;
    - a natural fit to asynchronous, in-order evidence streams.
 
-   It does **not** buy sample efficiency. The FRESCO execution rules (R1, R3, R4, R5) apply equally to fixed-n confirmations. A fixed-n test also needs exactly-once slots, no fresh-key retries, and a global error budget. Only in-order commit becomes optional, because a fixed-n test reads all n results together. **So the strongest practical recommendation is: repaired Algorithm 1 (or LEXIS-S, where anytime properties matter), executed under the FRESCO rules.** This supports the peer review's reframing (§4.2 there): the contribution is the execution rules and the estimator repair, not a new, more efficient estimator.
+   It does **not** buy sample efficiency. The FRESCO execution rules (R1, R3, R4, R5) apply equally to fixed-n confirmations. A fixed-n test also needs exactly-once slots, no fresh-key retries, and a global error budget. In-order commit is replaced by its fixed-sample counterpart: the evidence must be a slot set fixed in advance, never "the first n results to arrive". Experiment E9 (added during the reframing) shows that arrival-selected evidence breaks a fixed-n test almost surely (0.999). **So the strongest practical recommendation is: repaired Algorithm 1 (or LEXIS-S, where anytime properties matter), executed under the FRESCO rules.** This supports the peer review's reframing (§4.2 there): the contribution is the execution rules and the estimator repair, not a new, more efficient estimator.
 
 ### 3.4 What was not tried (to avoid post-hoc tuning)
 - larger caps for LEXIS-S, which would spend more calls;

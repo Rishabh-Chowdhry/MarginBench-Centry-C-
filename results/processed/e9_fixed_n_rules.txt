@@ -1,0 +1,9 @@
+fixed-n CP confirmation: n=30, family=12, level eps/12 -> confirm iff >= 13 successes
+configuration                                                P(false confirmation)  [95% Wilson]
+rules applied, no faults                                     0.0354  [0.0338, 0.0370]
+rules applied, crashes 0.3/0.1 imputed as 0                  0.0135  [0.0125, 0.0145]
+default: duplicates counted (dup 0.3)                        0.1107  [0.1080, 0.1135]
+default: crash -> fresh-key retry (effective p = 0.243)      0.1892  [0.1858, 0.1926]
+default: first n of 2n arrivals used (violations faster)     0.9987  [0.9983, 0.9990]
+default: worker-local budget, W = 8                          0.2661  [0.2553, 0.2772]
+rules applied: one global budget, W = 8                      0.0190  [0.0159, 0.0227]

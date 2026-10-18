@@ -120,5 +120,11 @@ The paper's real value — that execution semantics are part of the statistics �
 4. **Tighten statistics.** Use paired analyses for common-random-number runs, a horizon-sensitivity check, and one-sided validity tests.
 5. **Consider merging.** Fold the corrected estimator and the execution rules into the MARGIN-Bench paper as its estimation section. That may be a stronger single publication than two thinner ones.
 
+## 9a. Status of the redesign (18 Oct 2026)
+- **Item 1 (reframe): done.** `paper/manuscript.tex` (v2), *"Execution Semantics Are Statistics: Rules for Valid Security Evaluation of LLM Agents on Unreliable Infrastructure"*. The six rules are now the contribution, with validity proved for both sequential and fixed-sample confirmation. The ledger is presented as one reference implementation, and the shared coordinator as an option, not a contribution. A fixed-sample rule study (E9, not preregistered) shows that the defaults break exact Clopper–Pearson confirmation too (0.11–0.999 against 0.05). The previous version is kept in `paper/archive/`.
+- **Item 3 (fix efficiency): attempted** (Stage 6). The hybrid narrows the gap but does not close it. The paper now recommends repaired Algorithm 1 at fixed budgets.
+- **Item 2 (real-agent measurement): open.** It remains the experiment that decides the paper's significance.
+- **Item 4 (paired statistics, horizon sensitivity): open.**
+
 ## 10. Overall assessment
 The work is careful, honest, and reproducible. Its negative results are reported rather than hidden, and it found a real error in the benchmark it set out to extend. It is not yet a high-impact research article. The theory is standard, the distributed algorithm offers no advantage over correctly executed independent runs, and the practical claim lacks real-world measurement. After the redesign above it could be a solid contribution to a security-evaluation or dependable-systems venue.

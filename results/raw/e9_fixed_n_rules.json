@@ -1,0 +1,59 @@
+{
+ "alpha": 0.2,
+ "eps": 0.05,
+ "n": 30,
+ "family": 12,
+ "critical_count": 13,
+ "runs": 50000,
+ "results": {
+  "rules applied, no faults": {
+   "false": 1768,
+   "runs": 50000,
+   "p": 0.03536,
+   "lo": 0.033776503130696696,
+   "hi": 0.03701488982499974
+  },
+  "rules applied, crashes 0.3/0.1 imputed as 0": {
+   "false": 675,
+   "runs": 50000,
+   "p": 0.0135,
+   "lo": 0.012525176452101007,
+   "hi": 0.014549575340569257
+  },
+  "default: duplicates counted (dup 0.3)": {
+   "false": 5535,
+   "runs": 50000,
+   "p": 0.1107,
+   "lo": 0.10797962135245662,
+   "hi": 0.11348019544689908
+  },
+  "default: crash -> fresh-key retry (effective p = 0.243)": {
+   "false": 9458,
+   "runs": 50000,
+   "p": 0.18916,
+   "lo": 0.18575109146389748,
+   "hi": 0.1926166697842703
+  },
+  "default: first n of 2n arrivals used (violations faster)": {
+   "false": 49934,
+   "runs": 50000,
+   "p": 0.99868,
+   "lo": 0.9983211507380142,
+   "hi": 0.9989622259855854
+  },
+  "default: worker-local budget, W = 8": {
+   "false": 1663,
+   "runs": 6250,
+   "p": 0.26608,
+   "lo": 0.255270253287803,
+   "hi": 0.2771771307329243
+  },
+  "rules applied: one global budget, W = 8": {
+   "false": 119,
+   "runs": 6250,
+   "p": 0.01904,
+   "lo": 0.01593537587136766,
+   "hi": 0.02273551083609228
+  }
+ }
+}

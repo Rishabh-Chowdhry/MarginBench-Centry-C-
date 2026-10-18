@@ -249,7 +249,7 @@ def compare(acc, golden):
 
 
 # ------------------------------------------------------------------ test cases
-def run_load(cl, n=6, budget=120, fault=None, fault_at=4.0, seed0=0):
+def run_load(cl, n=6, budget=120, fault=None, fault_at=2.0, seed0=0):
     names = cl.start_workers(n, budget, seed0)
     t0 = time.time()
     if fault:
@@ -415,7 +415,7 @@ def main():
             ("TC3 timeouts+resets", {"setup": flaky}), ("TC4 kill recorder", {"fault": f_kill_recorder}),
             ("TC5 pause arbiter", {"fault": f_pause_arbiter}),
             ("TC6 partition treasurer", {"fault": f_partition_treasurer}),
-            ("TC7 kill 2 workers", {"fault": f_kill_workers})]
+            ("TC7 kill 2 workers", {"fault": f_kill_workers, "budget": 300})]
     try:
         for name, kw in plan:
             if only and name.split()[0] not in only:

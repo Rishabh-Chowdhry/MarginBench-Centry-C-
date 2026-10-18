@@ -726,6 +726,7 @@ class Worker:
         self.sk = sg.device_key(secret) if secret else None
         self.run_id = (params.manifest or {}).get("run_id")
         self.lease_i, self.nonce, self.reqs = 0, 0, {}
+        self.signed_slots = set()                 # device-local write-once log: one signed outcome per slot
         self.codes = {}                           # non-200 response codes seen, by code
         self.mine = []
 
@@ -783,6 +784,9 @@ class Worker:
                     time.sleep(0.05)
                     continue
                 self.calls += 1
+                if (j, s["k"]) in self.signed_slots:  # never re-run (and re-sign) a slot: a coordinator
+                    continue                           # must not be able to retry until a violation appears
+                self.signed_slots.add((j, s["k"]))
                 y = int(self.sc.outcome(s["level"], s["content"], s["key"]))
                 body = {"j": j, "k": s["k"], "token": s["token"], "y": y, "worker": self.name}
                 if self.sk is not None:

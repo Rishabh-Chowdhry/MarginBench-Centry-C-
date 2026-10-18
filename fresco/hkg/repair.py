@@ -287,19 +287,27 @@ def _schema_edges(node):
     return []
 
 
-def normalise_edges(node, accepted):
-    """Edges in schema order; each digest from the accepted target, else from the copy,
-    else the edge is omitted (an optional edge, or an unrecoverable target)."""
+def normalise_edges(node, accepted, anchored=None):
+    """Edges in schema order; each digest from the accepted target, else the target's
+    anchored-majority digest, else the copy's, else the edge is omitted (an optional
+    edge, or an unrecoverable target). Edges never affect signed or derived content."""
     stored = {tt: td for _, tt, _, td in node.edges}
     edges = []
     for rel, tt, tk in _schema_edges(node):
-        td = accepted[(tt, tk)].digest() if (tt, tk) in accepted else stored.get(tt)
+        if (tt, tk) in accepted:
+            td = accepted[(tt, tk)].digest()
+        else:
+            td = (anchored((tt, tk)) if anchored else None) or stored.get(tt)
         if td is not None:
             edges.append((rel, tt, tk, td))
     return Node(node.type, node.key, node.payload, node.owner, tuple(edges))
 
 
-def decide_signed(fabric, nid, copies, accepted, params):
+def _wellformed(digest):
+    return isinstance(digest, str) and len(digest) == 32 and set(digest) <= set("0123456789abcdef")
+
+
+def decide_signed(fabric, nid, copies, accepted, params, anchored=None, edge_support=None):
     """Authenticity comes from the origin signature, not from votes: an adversary holding
     any number of coordinator domains cannot make a forged value admissible. Two
     distinct signed values for one id mean the device equivocated: quarantine."""
@@ -310,7 +318,7 @@ def decide_signed(fabric, nid, copies, accepted, params):
         if a is not None:
             key = canon(n.payload)
             kind[key] = a
-            by_payload[key].append(normalise_edges(n, accepted))
+            by_payload[key].append(normalise_edges(n, accepted, anchored))
     signed = [k for k, a in kind.items() if a == "signed"]
     if len(signed) > 1:
         return QUARANTINED, None
@@ -319,7 +327,15 @@ def decide_signed(fabric, nid, copies, accepted, params):
         return QUARANTINED, None
     # edges are not signed: they are rebuilt from accepted neighbours; any edge whose
     # target is unverifiable keeps the value most copies agree on
-    pick = Counter(n.encode() for n in by_payload[chosen]).most_common(1)[0][0]
+    counts = Counter(n.encode() for n in by_payload[chosen])
+    if len(counts) > 1 and edge_support:              # copies disagree on an unverifiable edge:
+        def score(b):                                 # well-formed and anchor-backed digests first
+            n = Node.decode(b)
+            return (sum(_wellformed(td) for _, _, _, td in n.edges),
+                    sum(edge_support((tt, tk), td) for _, tt, tk, td in n.edges), counts[b])
+        pick = max(counts, key=score)
+    else:
+        pick = counts.most_common(1)[0][0]
     pick = Node.decode(pick)
     clean = all(n.encode() == pick.encode() for n in copies.values()) and len(copies) == len(fabric.placement(pick))
     return (VERIFIED if clean else REPAIRED), pick
@@ -453,7 +469,17 @@ def decide(fabric, nid, cfg, rev, logs, der, derive_fn=None, params=None):
     copies, items = collect(fabric, nid, cfg, rev, logs)
     if cfg.authenticate:
         if nid[0] in SIGNED:
-            return decide_signed(fabric, nid, copies, der.acc, params)
+            def anchored(tid):
+                items = collect(fabric, tid, cfg, rev, logs)[1]
+                counts, voters = tally(items, cfg)
+                if counts:
+                    best, c = counts.most_common(1)[0]
+                    if 2 * c > voters:
+                        return best
+                return None
+            def edge_support(tid, digest):
+                return support(collect(fabric, tid, cfg, rev, logs)[1], digest)
+            return decide_signed(fabric, nid, copies, der.acc, params, anchored, edge_support)
         if nid[0] in DERIVED:
             return decide_derived(fabric, nid, copies, derive_fn(nid) if derive_fn else der.derive(nid))
     if not cfg.quarantine:                       # naive best effort

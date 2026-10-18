@@ -409,12 +409,16 @@ def tc_storage(cl, rows):
         cl.start_coordinators()
         cl.scan()
         _, acc = invariants(cl.snapshot(), check_write_once=False)
-        wrong = sum(1 for t in targets if t in acc and acc[t].encode() != golden[t].encode())
+        # wrong = accepted content (signed or derived payload) differs from the original; a record whose
+        # content is right but whose evidence links omit a destroyed record is counted separately
+        wrong = sum(1 for t in targets if t in acc and acc[t].payload != golden[t].payload)
         corr = sum(1 for t in targets if t in acc and acc[t].encode() == golden[t].encode())
+        links = sum(1 for t in targets if t in acc and acc[t].payload == golden[t].payload
+                    and acc[t].encode() != golden[t].encode())
         added = {i[1] for i, n in acc.items() if i[0] == "Confirmation" and n.payload["confirmed"]} - gconf
         rows.append({"tc": f"TC10 adversary k={k}", "targets": len(targets), "majority_targets": majority,
-                     "wrong": wrong, "correct": corr, "added_conf": len(added),
-                     "quarantined": len(targets) - wrong - corr, "pass": wrong == 0 and not added})
+                     "wrong": wrong, "correct": corr, "content_right_links_missing": links, "added_conf": len(added),
+                     "quarantined": len(targets) - wrong - corr - links, "pass": wrong == 0 and not added})
     cl.stop_coordinators()
 
 

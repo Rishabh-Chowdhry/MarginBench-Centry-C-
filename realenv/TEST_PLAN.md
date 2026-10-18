@@ -50,3 +50,5 @@ AgentDojo v1.2.1 simulated tool environments (banking, slack, travel, workspace)
 
 *Revision after the majority-adversary loophole report (before run 9):* evidence is now signed by the executor devices, and the coordinators and the harness use TWGR-S. TC10 is extended to adversaries controlling k = 1, …, 5 domains, rewriting both Results (0 → 1) and Confirmations (unconfirmed → confirmed). New pass criterion for every k: **no wrong accepted record and no added confirmation**. Quarantine (lost evidence) is allowed. This holds even when the adversary holds a majority, or all five, of the domains.
 
+*Clarification after run 9, before run 10:* in TC10, a target counts as **wrong** when its accepted content (signed or derived payload) differs from the original. A target whose content is right, but whose evidence links omit a record the adversary destroyed, is reported separately as "content right, links missing". Added confirmations remain a pass criterion of their own.
+

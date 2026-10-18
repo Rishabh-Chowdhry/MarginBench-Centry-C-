@@ -34,8 +34,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import numpy as np
 
 from fresco.hkg.graph import DOMAINS, DomainStore, Fabric, Node, canon, nid_str, sha, witnesses
-from fresco.hkg.repair import (TYPE_OWNER, RunParams, evaluate_confirmation, make_allocation, make_confirmation,
-                               make_key, make_lease, report, twgr)
+from fresco.hkg import sign as sg
+from fresco.hkg.repair import (TYPE_OWNER, RunParams, TWGRConfig, admissible, evaluate_confirmation, make_allocation,
+                               make_confirmation, make_key, make_lease, report, robust_confirmed, twgr)
 from fresco.sim.scenario import Level, Scenario
 
 SCENARIOS = {
@@ -46,9 +47,10 @@ SCENARIOS = {
 
 def env_params():
     p = json.loads(os.environ.get("QUINTET_PARAMS", "{}"))
+    man = os.environ.get("QUINTET_MANIFEST")
     return RunParams(eps=p.get("eps", 0.05), lease_size=p.get("lease_size", 8),
                      run_key=p.get("run_key", "quintet-run-key").encode(), alpha=p.get("alpha", 0.2),
-                     cap=p.get("cap", 40))
+                     cap=p.get("cap", 40), manifest=json.loads(man) if man else None)
 
 
 def env_peers():
@@ -201,6 +203,7 @@ class Coordinator:
             for j, kk in self._slots(ids):
                 if ("Result", f"{j}:{kk}") not in ids:
                     self.slot_time.setdefault((j, kk), time.time())
+        self.reserved = getattr(self, "reserved", {})   # (lease, i) -> request hash (Treasurer)
         self.funded = {}                          # (lease, i) -> j
         for n in self._nodes("Allocation"):
             self.funded[(n.payload["lease"], n.payload["i"])] = n.key
@@ -389,14 +392,15 @@ class Coordinator:
         return 200, {"lease": n}
 
     def op_reserve(self, body):
-        lease_key = str(body["lease"])
+        """The device chooses its index i within the lease it holds (it signs it); the
+        Treasurer admits each (lease, i) for one request only, so sum a_j <= eps."""
+        lease_key, i, rh = str(body["lease"]), int(body["i"]), body["req"]
         lease = self.fetch(("Lease", lease_key))
         with self.lock:
-            used = self.lease_use.get(lease_key, 0)
-            if lease is None or used >= self.p.lease_size:
-                return 409, {"error": "lease exhausted"}
-            self.lease_use[lease_key] = used + 1
-        return 200, {"i": used + 1, "lease": b64(lease.encode())}
+            held = self.reserved.setdefault((lease_key, i), rh)
+            if lease is None or not 1 <= i <= self.p.lease_size or held != rh:
+                return 409, {"error": "lease exhausted or index taken"}
+        return 200, {"lease": b64(lease.encode())}
 
     def op_allocate(self, body):
         cand = Node.decode(unb64(body["candidate"]))
@@ -411,18 +415,22 @@ class Coordinator:
 
     # Registrar
     def op_register(self, body):
+        req = body.get("req", {})
+        probe = Node("Candidate", "0", req, "registrar")
+        if self.p.manifest and admissible(probe, {}, self.p) != "signed":
+            return 403, {"error": "registration request not signed by a manifest device"}
         try:
-            r = call(self.peers["treasurer"], "/reserve", {"lease": body["lease"]})
+            r = call(self.peers["treasurer"], "/reserve", {"lease": req.get("lease"), "i": req.get("i"),
+                                                           "req": sg.request_hash(req)})
         except Unavailable:
             return 503, {"error": "treasurer unavailable"}
-        if "i" not in r:
+        if "lease" not in r:
             return 409, r
         lease = Node.decode(unb64(r["lease"]))
         with self.lock:
             j = str(self.next_j)
             self.next_j += 1
-        cand = self.publish(Node("Candidate", j, {"level": body["level"], "content": body["content"],
-                                                  "lease": lease.key, "i": r["i"]}, "registrar",
+        cand = self.publish(Node("Candidate", j, req, "registrar",
                                  (("funded_by", "Lease", lease.key, lease.digest()),)))
         try:
             a = call(self.peers["treasurer"], "/allocate", {"candidate": b64(cand.encode())})
@@ -495,7 +503,14 @@ class Coordinator:
         sl = self.fetch(("SlotLease", f"{j}:{k}"))
         if sl is None or sl.payload["token"] != body["token"]:
             return 403, {"error": "fenced: stale or unknown slot token"}
-        payload = {"crashed": True} if body.get("crashed") else {"y": int(body["y"])}
+        payload = {"y": int(body["y"])}
+        if body.get("sig") is not None:
+            payload.update(worker=body.get("worker"), sig=body.get("sig"))
+        if self.p.manifest:
+            cand = self.fetch(("Candidate", j))
+            probe = Node("Result", f"{j}:{k}", payload, "recorder")
+            if cand is None or admissible(probe, {("Candidate", j): cand}, self.p) != "signed":
+                return 403, {"error": "result not signed by the candidate's device"}
         return self._record(j, k, payload)
 
     def _expirer(self):
@@ -564,10 +579,12 @@ class Coordinator:
             return 422, {"error": f"undecodable result: {e}"}
         n, _, _, ok = evaluate_confirmation(alloc, [r.payload.get("y") for r in results], self.p.alpha,
                                             self.p.cap, self.p.bet_cap)
+        if ok and not robust_confirmed(alloc, results, self.p):
+            ok = False                            # unsigned crash slots are unknown, not 0 (TWGR-S rule)
         if not ok and n < self.p.cap:
             return 200, {"status": "ACTIVE"}
         try:
-            conf = self.publish(make_confirmation(cand, alloc, results, self.p))
+            conf = self.publish(make_confirmation(cand, alloc, results, self.p, robust=True))
         except ValueError:
             return 200, {"status": "DECIDED"}
         if conf.payload["confirmed"]:
@@ -611,7 +628,7 @@ class Coordinator:
             except (Unavailable, KeyError):
                 reach[d] = False
         before = {d: dict(st.blobs) for d, st in fab.stores.items()}
-        status, acc = twgr(fab, self.p, heal=True)
+        status, acc = twgr(fab, self.p, TWGRConfig(authenticate=bool(self.p.manifest)), heal=True)
         pushed = 0
         for d, st in fab.stores.items():
             if not reach[d]:
@@ -700,11 +717,15 @@ class Worker:
     """An executor device: obtains leases, registers candidates, runs slots and
     reports results. The oracle is the synthetic scenario (ground truth known)."""
 
-    def __init__(self, name, peers, params, scenario, budget, seed, pool=2, timeout=5.0, wall=900.0):
+    def __init__(self, name, peers, params, scenario, budget, seed, pool=2, timeout=5.0, wall=900.0, secret=None):
         self.name, self.peers, self.p, self.sc = name, peers, params, scenario
         self.budget, self.pool, self.timeout, self.wall = budget, pool, timeout, wall
         self.rng = np.random.default_rng(seed)
         self.calls, self.errors, self.lease = 0, 0, None
+        secret = secret or os.environ.get("QUINTET_DEVICE_SECRET")
+        self.sk = sg.device_key(secret) if secret else None
+        self.run_id = (params.manifest or {}).get("run_id")
+        self.lease_i, self.nonce, self.reqs = 0, 0, {}
         self.codes = {}                           # non-200 response codes seen, by code
         self.mine = []
 
@@ -731,15 +752,23 @@ class Worker:
             self.mine = [j for j in self.mine
                          if self._call("arbiter", "/status", {"j": j}).get("status") == "ACTIVE"]
             while len(self.mine) < self.pool:
-                if self.lease is None:
+                if self.lease is None or self.lease_i >= self.p.lease_size:
                     self.lease = self._call("treasurer", "/grant", {"worker": self.name}).get("lease")
+                    self.lease_i = 0
                     if self.lease is None:
                         break
                 level = int(self.rng.integers(1, top + 1))
                 content = int(self.rng.integers(self.sc.levels[level - 1].space))
-                r = self._call("registrar", "/register", {"lease": self.lease, "level": level, "content": content})
+                self.lease_i += 1
+                self.nonce += 1
+                req = {"lease": str(self.lease), "level": level, "content": content, "worker": self.name,
+                       "nonce": self.nonce, "i": self.lease_i}
+                if self.sk is not None:
+                    req["sig"] = sg.sign_request(self.sk, self.run_id, req)
+                r = self._call("registrar", "/register", {"req": req})
                 if "j" in r and r.get("_code", 200) == 200:
                     self.mine.append(r["j"])
+                    self.reqs[r["j"]] = sg.request_hash(req)
                 elif r.get("_code") == 409:
                     self.lease = None
                 else:
@@ -754,8 +783,11 @@ class Worker:
                     time.sleep(0.05)
                     continue
                 self.calls += 1
-                y = self.sc.outcome(s["level"], s["content"], s["key"])
-                self._call("recorder", "/result", {"j": j, "k": s["k"], "token": s["token"], "y": y})
+                y = int(self.sc.outcome(s["level"], s["content"], s["key"]))
+                body = {"j": j, "k": s["k"], "token": s["token"], "y": y, "worker": self.name}
+                if self.sk is not None:
+                    body["sig"] = sg.sign_result(self.sk, self.run_id, j, s["k"], y, self.reqs[j], s["key"])
+                self._call("recorder", "/result", body)
         return {"worker": self.name, "calls": self.calls, "errors": self.errors, "codes": self.codes}
 
 

@@ -415,7 +415,8 @@ def robust_confirmed(alloc, results, params):
     original run, whatever an adversary substituted (the e-process is not monotone in
     individual outcomes, so setting them to 0 is not enough)."""
     import itertools
-    free = [i for i, r in enumerate(results[:params.cap]) if r is not None and r.payload.get("sig") is None]
+    free = [i for i, r in enumerate(results[:params.cap])
+            if r is not None and r.payload.get("crashed") and r.payload.get("sig") is None]
     if len(free) > MAX_UNSIGNED:
         return False
     base = [r.payload.get("y") if r is not None else None for r in results]

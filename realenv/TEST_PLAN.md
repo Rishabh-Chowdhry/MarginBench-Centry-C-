@@ -48,3 +48,5 @@ AgentDojo v1.2.1 simulated tool environments (banking, slack, travel, workspace)
 
 *Clarification added after run 7, before run 8:* TC12 checks I1, I4 and I5 on the records written after the repair. Records that TWGR quarantined keep their unverifiable copies by design, because repair never overwrites what it cannot verify. Confirmations accepted on their anchors whose inputs were quarantined cannot be re-derived either, and Theorem 2 covers them through its case (a). I2 and I3 remain global, and the criterion also requires no 5xx server errors seen by workers.
 
+*Revision after the majority-adversary loophole report (before run 9):* evidence is now signed by the executor devices, and the coordinators and the harness use TWGR-S. TC10 is extended to adversaries controlling k = 1, …, 5 domains, rewriting both Results (0 → 1) and Confirmations (unconfirmed → confirmed). New pass criterion for every k: **no wrong accepted record and no added confirmation**. Quarantine (lost evidence) is allowed. This holds even when the adversary holds a majority, or all five, of the domains.
+

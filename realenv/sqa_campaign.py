@@ -26,13 +26,19 @@ sys.path.insert(0, str(ROOT))
 from experiments.e11_adversary import anchor_domains, control  # noqa: E402
 from fresco.hkg.corrupt import tamper_node  # noqa: E402
 from fresco.hkg.graph import DOMAINS, DomainStore, Fabric, Node  # noqa: E402
-from fresco.hkg.repair import QUARANTINED, RunParams, derive_confirmation, report, twgr  # noqa: E402
+from fresco.hkg import sign  # noqa: E402
+from fresco.hkg.repair import QUARANTINED, RunParams, TWGRConfig, derive_confirmation, report, twgr  # noqa: E402
 from realenv.disk_corrupt import corrupt_file  # noqa: E402
 
 IMAGE = "quintet-device:1"
 NET = "qnet"
 PARAMS = {"eps": 0.05, "lease_size": 8, "alpha": 0.2, "cap": 40, "run_key": "sqa-run-key"}
-RP = RunParams(eps=0.05, lease_size=8, run_key=b"sqa-run-key", alpha=0.2, cap=40)
+# executor devices sign their evidence; the manifest of their public keys is published
+# before the run and given to every coordinator (TWGR-S). Secrets go only to the devices.
+DEVICE_SECRETS = {f"w{i}": f"sqa-device-secret-{i}" for i in range(1, 7)}
+MANIFEST = sign.make_manifest("sqa-run-1", DEVICE_SECRETS)
+RP = RunParams(eps=0.05, lease_size=8, run_key=b"sqa-run-key", alpha=0.2, cap=40, manifest=MANIFEST)
+TWGR_S = TWGRConfig(authenticate=True)
 HOST_PORT = {r: 18101 + i for i, r in enumerate(DOMAINS)}
 TOXI_PORT = {r: 9201 + i for i, r in enumerate(DOMAINS)}
 SLOT_TTL = 8
@@ -64,7 +70,7 @@ class Cluster:
 
     def env(self, peers):
         return ["-e", "QUINTET_PEERS=" + json.dumps(peers), "-e", "QUINTET_PARAMS=" + json.dumps(PARAMS),
-                "-e", "QUINTET_SCENARIO=" + self.scenario]
+                "-e", "QUINTET_SCENARIO=" + self.scenario, "-e", "QUINTET_MANIFEST=" + json.dumps(MANIFEST)]
 
     def down(self):
         ids = sh("docker", "ps", "-aq", "--filter", "name=^q-", check=False).split()
@@ -142,7 +148,9 @@ class Cluster:
             name = f"q-{prefix}{i + 1}"
             sh("docker", "rm", "-f", name, check=False)
             sh("docker", "run", "-d", "--name", name, "--network", NET, "--cpus", "0.5", "--memory", "192m",
-               "-v", f"{ROOT}:/app:ro", *self.env(peers), IMAGE, "python", "-m", "fresco.quintet.service",
+               "-v", f"{ROOT}:/app:ro", *self.env(peers),
+               "-e", "QUINTET_DEVICE_SECRET=" + DEVICE_SECRETS[f"{prefix}{i + 1}"], IMAGE,
+               "python", "-m", "fresco.quintet.service",
                "worker", "--name", f"{prefix}{i + 1}", "--budget", str(budget), "--seed", str(seed0 + i))
             names.append(name)
         return names
@@ -195,7 +203,7 @@ def invariants(fab, check_write_once=True, scope=None):
     """scope: ids for which I1, I4 and I5 are checked (default all). After storage faults,
     quarantined records keep their unverifiable copies by design, so TC12 checks the
     records written after the repair."""
-    status, acc = twgr(copy.deepcopy(fab), RP, heal=False)
+    status, acc = twgr(copy.deepcopy(fab), RP, TWGR_S, heal=False)
     inscope = (lambda i: True) if scope is None else (lambda i: i in scope)  # noqa: E731
     out = {"records": len(status), "status": {}}
     for s in status.values():
@@ -375,19 +383,26 @@ def tc_storage(cl, rows):
         rows.append({"tc": f"TC9 lose {'+'.join(lost)}", "scan1": scan1["status"], "vs_golden": cmp,
                      "pass": cmp["wrong_nonconf"] == 0 and cmp["added_conf"] == 0})
 
+    # TC10: an adversary controlling k of the five domains rewrites Results (0 -> 1) and
+    # Confirmations (unconfirmed -> confirmed) consistently everywhere it can, up to k = 5.
+    # Since the loophole fix (TWGR-S) the criterion is: no added confirmation and no
+    # non-conservative wrong record for every k, including a majority and all five.
     rng = np.random.default_rng(7)
-    res0 = [i for i, n in golden.items() if i[0] == "Result" and n.payload.get("y") == 0]
-    for k in (1, 2):
+    gconf = {i[1] for i, n in golden.items() if i[0] == "Confirmation" and n.payload["confirmed"]}
+    res0 = sorted(i for i, n in golden.items() if i[0] == "Result" and n.payload.get("y") == 0)
+    conf0 = sorted(i for i, n in golden.items() if i[0] == "Confirmation" and not n.payload["confirmed"])
+    for k in range(1, 6):
         restore()
         fab = Fabric()
         for r in DOMAINS:
             fab.stores[r] = DomainStore.load(r, cl.data / r / f"{r}.jsonl")
-        targets = [res0[int(t)] for t in rng.choice(len(res0), size=10, replace=False)]
-        minority = {}
+        targets = [res0[int(t)] for t in rng.choice(len(res0), size=6, replace=False)]
+        targets += [conf0[int(t)] for t in rng.choice(len(conf0), size=min(4, len(conf0)), replace=False)]
+        majority = 0
         for nid in targets:
             B = [str(d) for d in rng.choice(DOMAINS, size=k, replace=False)]
             A = anchor_domains(fab, nid)
-            minority[nid] = 2 * len(set(B) & A) <= len(A)          # Theorem 1 applies
+            majority += 2 * len(set(B) & A) > len(A)
             control(fab, nid, tamper_node(golden[nid]), B)
         for r in DOMAINS:
             fab.stores[r].save(cl.data / r / f"{r}.jsonl")
@@ -396,10 +411,10 @@ def tc_storage(cl, rows):
         _, acc = invariants(cl.snapshot(), check_write_once=False)
         wrong = sum(1 for t in targets if t in acc and acc[t].encode() != golden[t].encode())
         corr = sum(1 for t in targets if t in acc and acc[t].encode() == golden[t].encode())
-        wrong_min = sum(1 for t in targets if minority[t] and t in acc and acc[t].encode() != golden[t].encode())
-        rows.append({"tc": f"TC10 adversary k={k}", "targets": len(targets), "minority_targets": sum(minority.values()),
-                     "wrong": wrong, "wrong_minority": wrong_min, "correct": corr,
-                     "quarantined": len(targets) - wrong - corr, "pass": wrong_min == 0})
+        added = {i[1] for i, n in acc.items() if i[0] == "Confirmation" and n.payload["confirmed"]} - gconf
+        rows.append({"tc": f"TC10 adversary k={k}", "targets": len(targets), "majority_targets": majority,
+                     "wrong": wrong, "correct": corr, "added_conf": len(added),
+                     "quarantined": len(targets) - wrong - corr, "pass": wrong == 0 and not added})
     cl.stop_coordinators()
 
 

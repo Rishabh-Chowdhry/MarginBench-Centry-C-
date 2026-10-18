@@ -3,6 +3,6 @@
 FROM python:3.12-slim
 COPY ca*.crt /usr/local/share/ca-certificates/
 ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt
-RUN (update-ca-certificates || true) && pip install --no-cache-dir numpy==2.1.3
+RUN (update-ca-certificates || true) && pip install --no-cache-dir numpy==2.1.3 cryptography==44.0.2
 WORKDIR /app
 ENV PYTHONPATH=/app PYTHONUNBUFFERED=1

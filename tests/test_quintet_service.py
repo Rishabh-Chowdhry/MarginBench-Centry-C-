@@ -13,7 +13,11 @@ from fresco.hkg.graph import DOMAINS  # noqa: E402
 from fresco.quintet.service import SCENARIOS, Coordinator, Worker, call, make_handler  # noqa: E402
 from fresco.hkg.repair import RunParams  # noqa: E402
 
-P = RunParams(eps=0.05, lease_size=8, run_key=b"svc-test", alpha=0.2, cap=40)
+from fresco.hkg import sign as sg  # noqa: E402
+
+SECRETS = {f"w{i}": f"svc-test-device-{i}" for i in range(3)}
+P = RunParams(eps=0.05, lease_size=8, run_key=b"svc-test", alpha=0.2, cap=40,
+              manifest=sg.make_manifest("svc-test-run", SECRETS))
 
 
 def start_cluster(tmp_path):
@@ -43,7 +47,8 @@ def drain(coords, limit=30):
 def cluster(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("quintet")
     servers, peers, coords = start_cluster(tmp)
-    ws = [Worker(f"w{i}", peers, P, SCENARIOS["S1-dense"], budget=80, seed=i) for i in range(3)]
+    ws = [Worker(f"w{i}", peers, P, SCENARIOS["S1-dense"], budget=80, seed=i, secret=SECRETS[f"w{i}"])
+          for i in range(3)]
     th = [threading.Thread(target=w.run) for w in ws]
     for t in th:
         t.start()
@@ -178,3 +183,21 @@ def test_restart_fuzz_damaged_stores_boot_into_recovery(cluster, tmp_path, seed)
         corrupt_file(tmp_path / r / f"{r}.jsonl", 0.4, rng)
         c = Coordinator(r, tmp_path / r, off, P, SCENARIOS["S1-dense"])
         assert c.recovering
+
+
+def test_service_rejects_forged_requests_and_results(cluster):
+    """TWGR-S at the service boundary: the Registrar refuses an unsigned or foreign-signed
+    registration, and the Recorder refuses a result not signed by the candidate's device."""
+    _, _, peers, coords, _ = cluster
+    req = {"lease": "1", "level": 1, "content": 7, "worker": "w0", "nonce": 999, "i": 1}
+    assert call(peers["registrar"], "/register", {"req": req})["_code"] == 403
+    req["sig"] = sg.sign_request(sg.device_key("attacker"), P.manifest["run_id"], req)
+    assert call(peers["registrar"], "/register", {"req": req})["_code"] == 403
+    rec = coords["recorder"]
+    nid = next(i for i in rec.store.blobs if i[0] == "SlotLease")
+    sl = rec.fetch(nid)
+    j, k = nid[1].rsplit(":", 1)
+    before = rec.store.blobs.get(("Result", nid[1]))
+    r = call(peers["recorder"], "/result", {"j": j, "k": k, "token": sl.payload["token"], "y": 1,
+                                             "worker": "w0", "sig": "00" * 64})
+    assert r["_code"] == 403 and rec.store.blobs.get(("Result", nid[1])) == before

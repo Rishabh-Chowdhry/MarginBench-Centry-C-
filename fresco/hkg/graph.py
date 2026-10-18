@@ -87,12 +87,15 @@ class DomainStore:
         self.log.append(json.dumps({"s": len(self.log), "id": nid_str(nid), "d": digest, "c": chain}))
 
     def anchor_entries(self):
-        """Decodable anchor-log entries as (id string, digest, chain_ok)."""
+        """Decodable anchor-log entries as (id string, digest, link_ok). Each link is
+        checked locally against the previous entry's stored chain value, so one
+        corrupted entry invalidates at most itself and its successor rather than the
+        whole remaining log."""
         out, prev = [], "genesis"
         for raw in self.log:
             try:
                 e = json.loads(raw)
-                ok = e["c"] == sha(canon([prev, e["id"], e["d"]]))
+                ok = prev is not None and e["c"] == sha(canon([prev, e["id"], e["d"]]))
                 prev = e["c"]
                 out.append((e["id"], e["d"], ok))
             except Exception:
@@ -136,10 +139,11 @@ class Fabric:
     """In-process view of all five domain stores (the experiment substrate). The
     networked deployment implements the same three operations over HTTP."""
 
-    def __init__(self, replicas=2, archivist_anchor=True):
+    def __init__(self, replicas=2, archivist_anchor=True, receipts=True):
         self.stores = {d: DomainStore(d) for d in DOMAINS}
         self.replicas = replicas
         self.archivist_anchor = archivist_anchor
+        self.receipts = receipts                # witnesses also log the digest they stored
         self.truth = {}                         # ground truth for evaluation only
 
     def placement(self, node):
@@ -153,9 +157,13 @@ class Fabric:
         for d in self.placement(node):
             self.stores[d].put(node.id, b)
         dg = node.digest()
-        self.stores[node.owner].append_anchor(node.id, dg)
-        if self.archivist_anchor and node.owner != "archivist":
-            self.stores["archivist"].append_anchor(node.id, dg)
+        logged = [node.owner]
+        if self.receipts:
+            logged += [d for d in self.placement(node) if d not in logged]
+        if self.archivist_anchor and "archivist" not in logged:
+            logged.append("archivist")
+        for d in logged:
+            self.stores[d].append_anchor(node.id, dg)
         return dg
 
     def all_ids(self):

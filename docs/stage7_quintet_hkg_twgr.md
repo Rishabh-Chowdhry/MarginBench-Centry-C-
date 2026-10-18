@@ -66,7 +66,8 @@ flowchart LR
 
 **Blocks and placement:**
 - Each node is stored as bytes at its **owner** and at **two witness domains** chosen by a hash ring over the other four coordinators.
-- Its digest is appended to the owner's and the Archivist's **hash-chained anchor logs**.
+- Its digest is appended to the owner's, both witnesses' (a *receipt*) and the Archivist's **hash-chained anchor logs**.
+- *Deviation, recorded before the confirmatory runs:* witness receipts were added after a one-seed pilot showed that losing the owner and Archivist logs left many records with no anchor. The pilot is not reported as a result.
 
 **Three kinds of evidence for every record x:**
 - **W1 copies:** the three stored byte copies.

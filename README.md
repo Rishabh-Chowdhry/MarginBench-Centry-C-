@@ -12,6 +12,7 @@ distributed-systems contribution.
 | 4 | Simulator, experiment scripts, benchmark design, validation | [`docs/stage4_experiments_and_validation.md`](docs/stage4_experiments_and_validation.md) |
 | 5 | Manuscript + independent peer review | v2, reframed around execution rules: [`paper/manuscript.tex`](paper/manuscript.tex) ([PDF](paper/manuscript.pdf)); v1 in `paper/archive/`; review: [`docs/stage5_peer_review.md`](docs/stage5_peer_review.md) |
 | 6 | Screening + LEXIS hybrid (preregistered follow-up) | [`docs/stage6_hybrid_screening_lexis.md`](docs/stage6_hybrid_screening_lexis.md) |
+| 7 | QUINTET (five coordinators), heterogeneous evidence graph, TWGR repair; proofs, ablations, Docker SQA campaign, real AgentDojo agents | [`docs/stage7_quintet_hkg_twgr.md`](docs/stage7_quintet_hkg_twgr.md), [`realenv/TEST_PLAN.md`](realenv/TEST_PLAN.md), [`realenv/RESULTS.md`](realenv/RESULTS.md) |
 
 Code:
 
@@ -40,4 +41,20 @@ The manuscript (`paper/`) compiles with any LaTeX engine (built here with tecton
 `tectonic paper/manuscript.tex`); see the header comment for porting to the
 Springer Nature `sn-jnl` template.
 
-No result in this repository is an empirical finding about real agents.
+Stage 7 (corruption tolerance and real environments):
+
+```
+python3 -I experiments/e10_corruption.py 40     # TWGR ablations under storage corruption (~1 h, 4 cores)
+python3 -I experiments/e11_adversary.py 20      # coordinated adversary controlling k domains
+realenv/build_image.sh                          # device image (Docker)
+TOXIPROXY_BIN=/path/to/toxiproxy-server python3 -I realenv/sqa_campaign.py /tmp/sqa   # E12, ~30 min
+python3 realenv/e13_agentdojo.py qwen2.5:1.5b 120   # E13: AgentDojo + Ollama (OpenAI-compatible API on :11434)
+python3 -I analysis/stage7_figures.py           # results/processed/stage7_summary.md, figures/fig1[0-5]_*.png
+```
+
+- `fresco/hkg/` — heterogeneous evidence graph (`graph.py`), TWGR repair (`repair.py`), corruption injector (`corrupt.py`).
+- `fresco/quintet/` — the five coordinators in process (`cluster.py`) and as networked services plus workers (`service.py`).
+- `realenv/` — Docker device image, SQA harness, on-disk corruption, AgentDojo episode runner.
+
+All validity and recovery claims rest on synthetic ground truth. The only real-agent
+data are the E13 AgentDojo episodes (descriptive; see `realenv/RESULTS.md`).

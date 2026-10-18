@@ -106,6 +106,7 @@ class Coordinator:
         self._rebuild()
         for d in DOMAINS:
             threading.Thread(target=self._replicator, args=(d,), daemon=True).start()
+        self._resync()
         if role == "recorder":
             threading.Thread(target=self._expirer, daemon=True).start()
 
@@ -133,15 +134,12 @@ class Coordinator:
         self.n_leases = max(num("Lease"), default=0)
         self.next_j = max(num("Candidate"), default=0) + 1
         self.next_k = {}
-        for tt, k in ids:
-            if tt == "SlotLease":
-                j, kk = k.rsplit(":", 1)
-                self.next_k[j] = max(self.next_k.get(j, 1), int(kk) + 1)
+        for j, kk in self._slots(ids):
+            self.next_k[j] = max(self.next_k.get(j, 1), kk + 1)
         if self.role == "recorder":               # open slots resume their expiry clock after a restart
-            for tt, k in ids:
-                if tt == "SlotLease" and ("Result", k) not in self.store.blobs:
-                    j, kk = k.rsplit(":", 1)
-                    self.slot_time.setdefault((j, int(kk)), time.time())
+            for j, kk in self._slots(ids):
+                if ("Result", f"{j}:{kk}") not in self.store.blobs:
+                    self.slot_time.setdefault((j, kk), time.time())
         self.funded = {}                          # (lease, i) -> j
         for n in self._nodes("Allocation"):
             self.funded[(n.payload["lease"], n.payload["i"])] = n.key
@@ -150,6 +148,35 @@ class Coordinator:
             self.lease_use[lease] = max(self.lease_use.get(lease, 0), i)
         self.b_hat = min((n.payload["b_hat"] for n in self._nodes("Frontier")), default=None)
         self.frontier_seq = max((int(n.key) for n in self._nodes("Frontier")), default=0)
+
+    def _resync(self):
+        """After a restart the in-memory replication queues are gone: re-offer every
+        owned record to its witnesses (idempotent) and, at the Recorder, re-trigger
+        arbitration for every candidate with results (idempotent at the Arbiter)."""
+        js = set()
+        for nid, b in list(self.store.blobs.items()):
+            try:
+                n = Node.decode(b)
+            except ValueError:
+                continue
+            if n.owner != self.role or n.id != nid:
+                continue
+            for w in witnesses(nid, n.owner):
+                self._enqueue(w, "/store", {"id": nid_str(nid), "b": b64(b)})
+            if nid[0] == "Result":
+                js.add(nid[1].rsplit(":", 1)[0])
+        for j in sorted(js):
+            self._enqueue("arbiter", "/arbitrate", {"j": j})
+
+    @staticmethod
+    def _slots(ids):
+        """Well-formed SlotLease ids as (j, k); ids garbled by storage faults are skipped
+        (E12 defect D1: a bit flip inside an id used to crash the restart)."""
+        for tt, key in ids:
+            if tt == "SlotLease":
+                j, _, kk = key.rpartition(":")
+                if j.isdigit() and kk.isdigit():
+                    yield j, int(kk)
 
     # ------------------------------------------------------------ storage
     def _persist(self, line):
@@ -543,17 +570,21 @@ class Worker:
     """An executor device: obtains leases, registers candidates, runs slots and
     reports results. The oracle is the synthetic scenario (ground truth known)."""
 
-    def __init__(self, name, peers, params, scenario, budget, seed, pool=2, timeout=5.0):
+    def __init__(self, name, peers, params, scenario, budget, seed, pool=2, timeout=5.0, wall=900.0):
         self.name, self.peers, self.p, self.sc = name, peers, params, scenario
-        self.budget, self.pool, self.timeout = budget, pool, timeout
+        self.budget, self.pool, self.timeout, self.wall = budget, pool, timeout, wall
         self.rng = np.random.default_rng(seed)
         self.calls, self.errors, self.lease = 0, 0, None
+        self.codes = {}                           # non-200 response codes seen, by code
         self.mine = []
 
     def _call(self, role, path, body):
         for attempt in range(4):
             try:
-                return call(self.peers[role], path, body, timeout=self.timeout)
+                r = call(self.peers[role], path, body, timeout=self.timeout)
+                if "_code" in r:
+                    self.codes[str(r["_code"])] = self.codes.get(str(r["_code"]), 0) + 1
+                return r
             except Unavailable:
                 self.errors += 1
                 time.sleep(0.2 * 2 ** attempt)
@@ -561,7 +592,8 @@ class Worker:
 
     def run(self):
         K = len(self.sc.levels)
-        while self.calls < self.budget:
+        t0 = time.time()
+        while self.calls < self.budget and time.time() - t0 < self.wall:
             b_hat = self._call("arbiter", "/status", {"j": "0"}).get("b_hat")
             top = (b_hat or K + 1) - 1
             if top < 1:
@@ -584,12 +616,17 @@ class Worker:
                     break
             for j in list(self.mine):
                 s = self._call("recorder", "/slot", {"j": j, "worker": self.name})
+                if s.get("_code") == 409:            # cap reached: make sure it gets decided, then drop it
+                    self._call("arbiter", "/arbitrate", {"j": j})
+                    self.mine.remove(j)
+                    continue
                 if "k" not in s:
+                    time.sleep(0.05)
                     continue
                 self.calls += 1
                 y = self.sc.outcome(s["level"], s["content"], s["key"])
                 self._call("recorder", "/result", {"j": j, "k": s["k"], "token": s["token"], "y": y})
-        return {"worker": self.name, "calls": self.calls, "errors": self.errors}
+        return {"worker": self.name, "calls": self.calls, "errors": self.errors, "codes": self.codes}
 
 
 # ====================================================================== CLI

@@ -427,6 +427,10 @@ def e14():
     md.append("By suite (both attack conditions):\n")
     table(["suite"] + cats + ["failed"], trows)
     inj = [j["injection_outcome"] for r, j in rows if r["attack"] != "none"]
+    seen = [r for r in ok if r["attack"] != "none" and r["features"]["injection_seen"]]
+    md.append(f"Rule-based: the injected text reached the agent (returned by a tool) in {len(seen)} of "
+              f"{sum(r['attack'] != 'none' for r in ok)} attacked episodes; violations "
+              f"{sum(bool(r['violation']) for r in seen)}/{len(seen)} among those.\n")
     md.append("Injection outcome (judge): " + ", ".join(f"{c} {inj.count(c)}" for c in
                                                        ("NOT_EXPOSED", "IGNORED", "ATTEMPTED_FAILED", "EXECUTED")) + "\n")
     # judge validation against rule-based trace facts
@@ -458,6 +462,34 @@ def e14():
                 agree.append(x["task_failure"] == j0["task_failure"])
         md.append(f"Stability: {len(st)} re-judgements at T = 0.7 (3 per episode) agree with the T = 0 verdict on "
                   f"the failure category in {np.mean(agree):.2f} of cases.\n" if agree else "")
+    nt_path = RAW / "e14_notool.jsonl"
+    if nt_path.exists():
+        nt = [x for x in map(json.loads, nt_path.read_text().splitlines()) if "error" not in x]
+        beh = ("ASKS_USER", "TEXT_TOOL_CALL", "CLAIMED_ACTION", "PLAN_ONLY", "OTHER")
+        md.append(f"### What the agent did instead of calling a tool ({len(nt)} no-tool episodes)\n")
+        table(["behaviour", "judge", "rule classifier"],
+              [[b_, sum(x["behaviour"] == b_ for x in nt), sum(x["rule"] == b_ for x in nt)] for b_ in beh])
+        agree = np.mean([x["behaviour"] == x["rule"] for x in nt]) if nt else float("nan")
+        ks = ", ".join(f"{b_} κ = {kappa([x['behaviour'] == b_ for x in nt], [x['rule'] == b_ for x in nt]):.2f}"
+                       for b_ in beh if any(x['rule'] == b_ or x['behaviour'] == b_ for x in nt))
+        md.append(f"Judge and rule classifier agree on {agree:.2f} of no-tool episodes ({ks}).\n")
+    for other in sorted(RAW.glob("e14_episodes_*.jsonl")):
+        big = [r for r in map(json.loads, other.read_text().splitlines()) if "error" not in r]
+        if not big:
+            continue
+        keys = {(r["suite"], r["user_task"], r["attack"]) for r in big}
+        small = [r for r in ok if (r["suite"], r["user_task"], r["attack"]) in keys]
+        name = other.stem.replace("e14_episodes_", "")
+        md.append(f"### Capacity check: the same {len(big)} scenarios with a larger agent ({name})\n")
+
+        def summ(rs):
+            att = [r for r in rs if r["attack"] != "none"]
+            return [f"{sum(r['utility'] for r in rs)}/{len(rs)}", f"{sum(bool(r['violation']) for r in att)}/{len(att)}",
+                    f"{np.mean([r['features']['n_tool_calls'] == 0 for r in rs]):.2f}",
+                    f"{np.mean([r['features']['injection_seen'] for r in att]):.2f}" if att else "–",
+                    f"{np.median([r['latency_s'] for r in rs]):.0f}"]
+        table(["agent", "utility", "violations (attack)", "episodes with no tool call", "injection seen (attack)",
+               "median latency (s)"], [["qwen2.5:1.5b"] + summ(small), [name] + summ(big)])
     fig, ax = plt.subplots(figsize=(8.5, 3.8))
     palette = ["#2a78d6", "#7fb2ea", "#eb6834", "#eda100", "#9a6fd6", "#d1335b", "#1baf7a", "#8a8984"]
     groups = [(su, att) for su in sorted({r["suite"] for r, _ in fails}) for att in ("none", "important_instructions")]

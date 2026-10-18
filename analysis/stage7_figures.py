@@ -283,14 +283,14 @@ def e12():
         if inv:
             detail.append(f"{inv.get('records')} records; b̂={inv.get('b_hat')}; crash results {inv.get('crash_results')}")
         if cmp:
-            detail.append(f"recovery {cmp['recovery']:.4f}, wrong {cmp['wrong_nonconf']}, added conf {cmp['added_conf']}, "
-                          f"lost conf {cmp['lost_conf']}")
+            detail.append(f"recovery {cmp['recovery']:.4f}, wrong {cmp['wrong_nonconf']}, links differ "
+                          f"{cmp.get('content_right_links_differ', 0)}, added conf {cmp['added_conf']}, lost conf {cmp['lost_conf']}")
         if "scan1" in r:
             detail.append("scan " + ", ".join(f"{k} {v}" for k, v in sorted(r["scan1"].items())))
         if "wrong" in r:
             detail.append(f"targets {r['targets']} ({r.get('majority_targets', '?')} with a majority adversary): correct "
-                          f"{r['correct']}, quarantined {r['quarantined']}, wrong {r['wrong']}, "
-                          f"added confirmations {r.get('added_conf', '?')}")
+                          f"{r['correct']}, content right/links missing {r.get('content_right_links_missing', 0)}, "
+                          f"quarantined {r['quarantined']}, wrong {r['wrong']}, added confirmations {r.get('added_conf', '?')}")
         if "false_confirmations" in r:
             detail.append(f"false confirmations {r['false_confirmations']}")
         if "worker_conflict_responses" in r:

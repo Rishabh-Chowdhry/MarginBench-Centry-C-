@@ -53,5 +53,44 @@ Holm correction is **not** applied to non-inferiority, since each hypothesis is 
 
 ---
 
-## 3. Results
-*(Added after the runs. See §5.)*
+## 3. Results [SYNTHETIC] (added after the runs)
+**Scale.** 60,000 runs: 2,000 per cell, 30 cells, 31 s on 4 cores. Script: `experiments/e8_hybrid.py`. All tables: `results/processed/summary.md`, section E8.
+
+### 3.1 Headline numbers (default parameters (40, 5, 3); P(reach k*) with 95% Wilson CI)
+| Method | S1-moderate | S2-sparse | Mean calls S1 / S2 | P(false) on boundary null |
+|---|---|---|---|---|
+| LEXIS (Stage 4, matched budget) | 0.246 | 0.043 | — | 0.018 |
+| **LEXIS-S** (single pass) | **0.756** [0.737, 0.775] | **0.251** [0.232, 0.270] | 872 / 1,031 | **0.004** [0.002, 0.008] |
+| LEXIS-S, uniform weights | 0.756 [0.737, 0.775] | 0.231 [0.213, 0.250] | 875 / 1,039 | 0.004 |
+| Repaired Algorithm 1 (single pass) | 0.808 [0.790, 0.825] | 0.269 [0.250, 0.289] | 868 / 1,034 | 0.034 [0.027, 0.043] |
+| LEXIS-S, multi-pass (5,000 calls) | 0.998 | 0.733 [0.713, 0.751] | 1,141 / 2,893 | 0.014 |
+| Repaired Algorithm 1, multi-pass | 1.000 | 0.765 [0.746, 0.783] | 1,088 / 2,781 | 0.015 |
+
+### 3.2 Verdicts
+| Hypothesis | Result | Verdict |
+|---|---|---|
+| H6-valid | every LEXIS-S variant ≤ 0.014 (upper limit ≤ 0.021) at the boundary null | **supported** |
+| H6-noninf | difference in P(reach k*), LEXIS-S − Algorithm 1: S1 −0.052 [−0.077, −0.026]; S2 −0.018 [−0.045, +0.009] | **not supported** on S1 (inferiority not excluded); non-inferior on S2 |
+| H6-cheaper | mean-calls ratio 1.005 [0.995, 1.014] (S1) and 0.998 [0.989, 1.006] (S2) | **refuted**: no saving |
+| H6-anytime | multi-pass difference: S1 −0.002 [−0.005, +0.001]; S2 −0.032 [−0.059, −0.006] | non-inferior on S1; **not** on S2 |
+| H6-weights | scout vs uniform: S1 +0.000 [−0.027, +0.027]; S2 +0.020 [−0.007, +0.046] | **not supported** |
+| H6-sens | sweep settings (20,5,3), (40,3,3), (80,5,5): differences −0.020 to −0.049; non-inferior in 2 of 6 | **not supported**: conclusion is not robust in LEXIS-S's favour |
+
+### 3.3 Interpretation
+1. **Screening was the missing piece.** Adding Algorithm 1's screening stage to LEXIS lifts P(reach k*) from 0.246 to 0.756 on S1 and from 0.043 to 0.251 on S2. This removes most of the 3–6× gap found in Stage 4. The cause was search structure, not the statistics of confirmation.
+2. **The remaining 2–5 point gap is the price of anytime validity.** A fixed-n exact Clopper–Pearson test at n = 30 uses its error budget fully: its false-confirmation rate is 0.034 against a nominal 0.05. A betting e-process capped at 30 trials is valid at every stopping time, so it is more conservative at any fixed n (0.004). The spare error budget is exactly the power it gives up.
+3. **Early stopping saves almost nothing here.** About 800 of roughly 870 calls go to screening. Confirmation is a small share of the cost, so sequential confirmation cannot reduce total calls. That is why H6-cheaper fails.
+4. **Scouting-weighted spending did not help.** Promoted candidates have similar scouting scores (top 3 of 40), so the weights are nearly uniform.
+5. **Consequence for the project.** The e-process confirmation buys three properties:
+   - continuation and multi-pass extension without pre-planning;
+   - validity under arbitrary stopping;
+   - a natural fit to asynchronous, in-order evidence streams.
+
+   It does **not** buy sample efficiency. The FRESCO execution rules (R1, R3, R4, R5) apply equally to fixed-n confirmations. A fixed-n test also needs exactly-once slots, no fresh-key retries, and a global error budget. Only in-order commit becomes optional, because a fixed-n test reads all n results together. **So the strongest practical recommendation is: repaired Algorithm 1 (or LEXIS-S, where anytime properties matter), executed under the FRESCO rules.** This supports the peer review's reframing (§4.2 there): the contribution is the execution rules and the estimator repair, not a new, more efficient estimator.
+
+### 3.4 What was not tried (to avoid post-hoc tuning)
+- larger caps for LEXIS-S, which would spend more calls;
+- mixture or prior-free bets other than the plug-in;
+- adaptive allocation of confirmation trials between promoted candidates.
+
+Any of these may close the remaining gap. Each would need its own preregistration.

@@ -105,3 +105,13 @@ def kaplan_meier(times, events):
         out_t.append(float(u))
         out_s.append(s)
     return np.array(out_t), np.array(out_s)
+
+
+def newcombe_diff(k1, n1, k2, n2, z=1.96):
+    """Newcombe (1998) hybrid-score 95% interval for p1 - p2 from two Wilson intervals."""
+    p1, l1, u1 = wilson(k1, n1, z)
+    p2, l2, u2 = wilson(k2, n2, z)
+    d = p1 - p2
+    lo = d - math.sqrt((p1 - l1) ** 2 + (u2 - p2) ** 2)
+    hi = d + math.sqrt((u1 - p1) ** 2 + (p2 - l2) ** 2)
+    return d, lo, hi

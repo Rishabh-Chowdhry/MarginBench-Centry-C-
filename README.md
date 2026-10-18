@@ -11,6 +11,7 @@ distributed-systems contribution.
 | 3 | Distributed architecture, protocol, implementation plan | [`docs/stage3_architecture_and_implementation.md`](docs/stage3_architecture_and_implementation.md) |
 | 4 | Simulator, experiment scripts, benchmark design, validation | [`docs/stage4_experiments_and_validation.md`](docs/stage4_experiments_and_validation.md) |
 | 5 | Manuscript + independent peer review | [`paper/fresco_manuscript.tex`](paper/fresco_manuscript.tex) ([PDF](paper/fresco_manuscript.pdf)), [`docs/stage5_peer_review.md`](docs/stage5_peer_review.md) |
+| 6 | Screening + LEXIS hybrid (preregistered follow-up) | [`docs/stage6_hybrid_screening_lexis.md`](docs/stage6_hybrid_screening_lexis.md) |
 
 Code:
 

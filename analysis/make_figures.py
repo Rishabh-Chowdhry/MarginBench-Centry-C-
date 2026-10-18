@@ -433,6 +433,45 @@ def e7():
     table(["variant", "runs", "coverage", "median eta_1 (mu=.003)", "eta_2 (mu=.01)", "eta_3 (mu=0)", "eta_4 (mu=0)"], rows)
 
 
+def e8():
+    if not have("e8_hybrid"):
+        return
+    from analysis.stats import newcombe_diff
+    g = defaultdict(list)
+    for r in load("e8_hybrid"):
+        g[(r["instance"], r["method"], tuple(r["params"]))] += r["rows"]
+    md.append("## E8 (Stage 6) — screening + LEXIS hybrid (LEXIS-S) vs repaired Algorithm 1\n")
+    md.append("Single pass unless 'multipass' (budget 5,000 calls). params = (q, r_d, T); cap = r_h = 30.\n")
+    rows = []
+    for (inst, m, p), v in sorted(g.items()):
+        reach = sum(b == 3 for b, _, _ in v)
+        fal = sum(int(f) for _, _, f in v)
+        rows.append([inst, m, str(p), len(v), "{:.3f} [{:.3f}, {:.3f}]".format(*wilson(reach, len(v))),
+                     "{:.3f} [{:.3f}, {:.3f}]".format(*wilson(fal, len(v))), f"{np.mean([s for _, s, _ in v]):,.0f}"])
+    table(["instance", "method", "params", "runs", "P(reach k*)", "P(false conf.)", "mean calls"], rows)
+    md.append("### Preregistered comparisons\n")
+    comp = []
+    D = (40, 5, 3)
+    pairs = [("H6-noninf", "lexis-s", "alg1-cp", D), ("H6-anytime", "lexis-s-multipass", "alg1-cp-multipass", D),
+             ("H6-weights", "lexis-s", "lexis-s-uniform", D)]
+    pairs += [("H6-sens", "lexis-s", "alg1-cp", p) for p in ((20, 5, 3), (40, 3, 3), (80, 5, 5))]
+    for hyp, a, b, p in pairs:
+        for inst in ("S1-moderate", "S2-sparse"):
+            va, vb = g.get((inst, a, p)), g.get((inst, b, p))
+            if not va or not vb:
+                continue
+            ka, kb = sum(x[0] == 3 for x in va), sum(x[0] == 3 for x in vb)
+            d, lo, hi = newcombe_diff(ka, len(va), kb, len(vb))
+            ratio = bootstrap_ratio_ci([x[1] for x in va], [x[1] for x in vb], reps=2000)
+            if hyp == "H6-weights":
+                verdict = "supported" if lo > 0 else "not supported"
+            else:
+                verdict = "non-inferior" if lo > -0.05 else "**inferiority not excluded**"
+            comp.append([hyp, inst, f"{a} vs {b}", str(p), f"{d:+.3f} [{lo:+.3f}, {hi:+.3f}]",
+                         f"{ratio[0]:.3f} [{ratio[1]:.3f}, {ratio[2]:.3f}]", verdict])
+    table(["hypothesis", "instance", "comparison", "params", "diff P(reach k*)", "mean-calls ratio", "verdict"], comp)
+
+
 def main():
     FIG.mkdir(exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
@@ -444,6 +483,7 @@ def main():
     e5()
     e6()
     e7()
+    e8()
     (OUT / "summary.md").write_text("\n".join(md))
     print(f"wrote {OUT / 'summary.md'} and figures in {FIG}")
 

@@ -173,3 +173,57 @@ Levels 1-2 contain rare violators (mu = 0.003, 0.01; p = 0.3 > alpha), levels 3-
 |---|---|---|---|---|---|---|
 | r=3, t=1, certify p>=0.2 | 200 | 1.000 [0.981, 1.000] | 0.748 (N≈280) | 0.738 (N≈284) | 0.733 (N≈280) | 0.738 (N≈280) |
 | r=10, t=4, certify p>=0.3 | 200 | 1.000 [0.981, 1.000] | 0.392 (N≈100) | 0.400 (N≈102) | 0.385 (N≈102) | 0.392 (N≈101) |
+
+## E8 (Stage 6) — screening + LEXIS hybrid (LEXIS-S) vs repaired Algorithm 1
+
+Single pass unless 'multipass' (budget 5,000 calls). params = (q, r_d, T); cap = r_h = 30.
+
+| instance | method | params | runs | P(reach k*) | P(false conf.) | mean calls |
+|---|---|---|---|---|---|---|
+| S1-moderate | alg1-cp | (20, 5, 3) | 2000 | 0.585 [0.563, 0.606] | 0.005 [0.003, 0.009] | 596 |
+| S1-moderate | alg1-cp | (40, 3, 3) | 2000 | 0.728 [0.708, 0.747] | 0.005 [0.003, 0.010] | 636 |
+| S1-moderate | alg1-cp | (40, 5, 3) | 2000 | 0.808 [0.790, 0.825] | 0.004 [0.002, 0.009] | 868 |
+| S1-moderate | alg1-cp | (80, 5, 5) | 2000 | 0.953 [0.943, 0.961] | 0.004 [0.002, 0.009] | 1,556 |
+| S1-moderate | alg1-cp-multipass | (40, 5, 3) | 2000 | 1.000 [0.997, 1.000] | 0.001 [0.000, 0.003] | 1,088 |
+| S1-moderate | lexis-s | (20, 5, 3) | 2000 | 0.561 [0.539, 0.583] | 0.002 [0.001, 0.004] | 591 |
+| S1-moderate | lexis-s | (40, 3, 3) | 2000 | 0.679 [0.658, 0.699] | 0.001 [0.000, 0.003] | 636 |
+| S1-moderate | lexis-s | (40, 5, 3) | 2000 | 0.756 [0.737, 0.775] | 0.003 [0.001, 0.006] | 872 |
+| S1-moderate | lexis-s | (80, 5, 5) | 2000 | 0.933 [0.921, 0.943] | 0.000 [0.000, 0.002] | 1,562 |
+| S1-moderate | lexis-s-multipass | (40, 5, 3) | 2000 | 0.998 [0.994, 0.999] | 0.001 [0.000, 0.004] | 1,141 |
+| S1-moderate | lexis-s-uniform | (40, 5, 3) | 2000 | 0.756 [0.737, 0.775] | 0.001 [0.000, 0.003] | 875 |
+| S2-sparse | alg1-cp | (20, 5, 3) | 2000 | 0.167 [0.151, 0.183] | 0.007 [0.005, 0.012] | 688 |
+| S2-sparse | alg1-cp | (40, 3, 3) | 2000 | 0.245 [0.227, 0.264] | 0.006 [0.003, 0.010] | 747 |
+| S2-sparse | alg1-cp | (40, 5, 3) | 2000 | 0.269 [0.250, 0.289] | 0.007 [0.004, 0.012] | 1,034 |
+| S2-sparse | alg1-cp | (80, 5, 5) | 2000 | 0.474 [0.453, 0.496] | 0.004 [0.002, 0.008] | 1,829 |
+| S2-sparse | alg1-cp-multipass | (40, 5, 3) | 2000 | 0.765 [0.746, 0.783] | 0.003 [0.001, 0.006] | 2,781 |
+| S2-sparse | lexis-s | (20, 5, 3) | 2000 | 0.146 [0.131, 0.162] | 0.001 [0.000, 0.003] | 691 |
+| S2-sparse | lexis-s | (40, 3, 3) | 2000 | 0.213 [0.196, 0.231] | 0.002 [0.001, 0.004] | 747 |
+| S2-sparse | lexis-s | (40, 5, 3) | 2000 | 0.251 [0.232, 0.270] | 0.002 [0.001, 0.004] | 1,031 |
+| S2-sparse | lexis-s | (80, 5, 5) | 2000 | 0.434 [0.413, 0.456] | 0.001 [0.000, 0.004] | 1,844 |
+| S2-sparse | lexis-s-multipass | (40, 5, 3) | 2000 | 0.733 [0.713, 0.751] | 0.002 [0.001, 0.005] | 2,893 |
+| S2-sparse | lexis-s-uniform | (40, 5, 3) | 2000 | 0.231 [0.213, 0.250] | 0.002 [0.001, 0.004] | 1,039 |
+| null-boundary | alg1-cp | (40, 5, 3) | 2000 | 0.012 [0.008, 0.018] | 0.034 [0.027, 0.043] | 1,145 |
+| null-boundary | alg1-cp-multipass | (40, 5, 3) | 2000 | 0.002 [0.001, 0.005] | 0.015 [0.011, 0.021] | 4,888 |
+| null-boundary | lexis-s | (20, 5, 3) | 2000 | 0.003 [0.001, 0.007] | 0.009 [0.006, 0.015] | 757 |
+| null-boundary | lexis-s | (40, 3, 3) | 2000 | 0.002 [0.001, 0.005] | 0.010 [0.006, 0.015] | 837 |
+| null-boundary | lexis-s | (40, 5, 3) | 2000 | 0.001 [0.000, 0.004] | 0.004 [0.002, 0.008] | 1,158 |
+| null-boundary | lexis-s | (80, 5, 5) | 2000 | 0.002 [0.001, 0.004] | 0.008 [0.005, 0.013] | 2,192 |
+| null-boundary | lexis-s-multipass | (40, 5, 3) | 2000 | 0.004 [0.002, 0.007] | 0.014 [0.010, 0.020] | 4,890 |
+| null-boundary | lexis-s-uniform | (40, 5, 3) | 2000 | 0.001 [0.000, 0.003] | 0.004 [0.002, 0.009] | 1,158 |
+
+### Preregistered comparisons
+
+| hypothesis | instance | comparison | params | diff P(reach k*) | mean-calls ratio | verdict |
+|---|---|---|---|---|---|---|
+| H6-noninf | S1-moderate | lexis-s vs alg1-cp | (40, 5, 3) | -0.052 [-0.077, -0.026] | 1.005 [0.995, 1.014] | **inferiority not excluded** |
+| H6-noninf | S2-sparse | lexis-s vs alg1-cp | (40, 5, 3) | -0.018 [-0.045, +0.009] | 0.998 [0.989, 1.006] | non-inferior |
+| H6-anytime | S1-moderate | lexis-s-multipass vs alg1-cp-multipass | (40, 5, 3) | -0.002 [-0.005, +0.001] | 1.049 [1.012, 1.088] | non-inferior |
+| H6-anytime | S2-sparse | lexis-s-multipass vs alg1-cp-multipass | (40, 5, 3) | -0.032 [-0.059, -0.006] | 1.040 [1.004, 1.077] | **inferiority not excluded** |
+| H6-weights | S1-moderate | lexis-s vs lexis-s-uniform | (40, 5, 3) | +0.000 [-0.027, +0.027] | 0.997 [0.988, 1.006] | not supported |
+| H6-weights | S2-sparse | lexis-s vs lexis-s-uniform | (40, 5, 3) | +0.020 [-0.007, +0.046] | 0.992 [0.984, 1.001] | not supported |
+| H6-sens | S1-moderate | lexis-s vs alg1-cp | (20, 5, 3) | -0.023 [-0.054, +0.007] | 0.991 [0.980, 1.001] | **inferiority not excluded** |
+| H6-sens | S2-sparse | lexis-s vs alg1-cp | (20, 5, 3) | -0.021 [-0.043, +0.002] | 1.004 [0.996, 1.011] | non-inferior |
+| H6-sens | S1-moderate | lexis-s vs alg1-cp | (40, 3, 3) | -0.049 [-0.077, -0.021] | 0.999 [0.990, 1.009] | **inferiority not excluded** |
+| H6-sens | S2-sparse | lexis-s vs alg1-cp | (40, 3, 3) | -0.032 [-0.058, -0.006] | 1.000 [0.992, 1.009] | **inferiority not excluded** |
+| H6-sens | S1-moderate | lexis-s vs alg1-cp | (80, 5, 5) | -0.020 [-0.035, -0.006] | 1.004 [0.999, 1.009] | non-inferior |
+| H6-sens | S2-sparse | lexis-s vs alg1-cp | (80, 5, 5) | -0.040 [-0.071, -0.009] | 1.008 [0.999, 1.018] | **inferiority not excluded** |

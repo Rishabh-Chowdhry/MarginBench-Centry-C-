@@ -47,6 +47,22 @@ class PlugInKelly:
         return min(max(lam, 0.0), self.cap / alpha)
 
 
+class PriorKelly:
+    """Plug-in Kelly bet with fixed pseudo-counts (s0 successes, f0 failures) set at
+    registration, e.g. from scouting trials on independent keys. The prior is part
+    of the registration information, so bets stay predictable (Theorem 1)."""
+
+    def __init__(self, s0, f0, cap=0.5):
+        if s0 < 0 or f0 < 0 or not 0 < cap < 1:
+            raise ValueError("pseudo-counts must be >= 0 and cap in (0, 1)")
+        self.s0, self.f0, self.cap = s0, f0, cap
+
+    def __call__(self, successes, trials, alpha):
+        p_hat = (successes + self.s0 + 0.5) / (trials + self.s0 + self.f0 + 1.0)
+        lam = (p_hat - alpha) / (alpha * (1 - alpha))
+        return min(max(lam, 0.0), self.cap / alpha)
+
+
 class EProcess:
     def __init__(self, alpha, strategy):
         if not 0 < alpha < 1:

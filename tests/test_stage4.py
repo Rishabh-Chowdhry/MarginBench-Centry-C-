@@ -58,3 +58,45 @@ def test_baseline_runners():
     r = simulate(cfg)
     if r["time_final_frontier"] is not None:
         assert r["calls_until_final"] <= r["slots_leased"]
+
+
+# ---- Stage 6: screening + LEXIS hybrid ------------------------------------------
+from fresco.baselines.alg1 import Alg1Config, run_alg1_multipass  # noqa: E402
+from fresco.eprocess import PriorKelly  # noqa: E402
+from fresco.hybrid import HybridConfig, run_hybrid  # noqa: E402
+
+
+def _res(pi3=0.05):
+    def lvl(pi):
+        return lambda r: 0.6 if r.random() < pi else r.uniform(0, 0.2)
+    return [lvl(0), lvl(0), lvl(pi3), lvl(0.1)]
+
+
+def test_prior_kelly_bets_in_range_and_prior_shifts_bet():
+    s = PriorKelly(2.5, 0.0)
+    for succ, n in ((0, 0), (0, 10), (10, 10)):
+        lam = s(succ, n, 0.2)
+        assert 0 <= lam < 1 / 0.2
+    assert s(0, 0, 0.2) > PriorKelly(0.0, 2.5)(0, 0, 0.2)
+
+
+def test_hybrid_deterministic_and_budget_respected():
+    cfg = HybridConfig(budget=3000, stop_at_level=3)
+    a = [run_hybrid(_res(), cfg, np.random.default_rng(4)) for _ in range(3)]
+    b = [run_hybrid(_res(), cfg, np.random.default_rng(4)) for _ in range(3)]
+    assert a == b and all(r["slots"] <= 3000 for r in a)
+    r = run_alg1_multipass(_res(), Alg1Config(), np.random.default_rng(4), 3000, stop_at_level=3)
+    assert r["slots"] <= 3000
+
+
+def test_hybrid_single_pass_stays_within_one_pass_budget():
+    cfg = HybridConfig()
+    r = run_hybrid(_res(0.0), cfg, np.random.default_rng(1))
+    assert r["slots"] <= 4 * (cfg.q * cfg.r_d + cfg.T * cfg.cap) and r["passes"] == 1
+
+
+def test_hybrid_rarely_confirms_boundary_nulls():
+    null = [lambda r: 0.2] * 4
+    rng = np.random.default_rng(7)
+    false = sum(run_hybrid(null, HybridConfig(), rng)["false"] for _ in range(300))
+    assert false <= 6          # nominal 0.05 -> ~15 expected at the bound; observed far lower

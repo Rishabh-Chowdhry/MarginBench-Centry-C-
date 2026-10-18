@@ -55,6 +55,12 @@ The paper's real value — that execution semantics are part of the statistics �
 - **The hybrid is untested.** The paper proposes screening followed by e-process confirmation as the fix but does not test it. Without that, the paper offers a valid but inefficient estimator.
 - **Required.** Implement and evaluate the hybrid. Compare it against repaired Algorithm 1 at matched budgets on both scenarios.
 
+**Follow-up (Stage 6, preregistered):** the hybrid has now been built and tested. The results are in `docs/stage6_hybrid_screening_lexis.md`.
+- **Gap mostly closed.** LEXIS-S cuts the gap from 3–6× to 2–5 percentage points of P(reach k*): 0.756 vs 0.808 on S1, 0.251 vs 0.269 on S2.
+- **But not non-inferior.** It fails the preregistered non-inferiority margin of 0.05 in 4 of 6 sensitivity comparisons.
+- **No savings, no benefit from scout weighting.** It saves no oracle calls, and scout-weighted spending does not help.
+- **Updated recommendation.** This concern is now *partly resolved*. The paper should say plainly that anytime validity costs a little power at a fixed budget. The redesign in §9 should treat repaired Algorithm 1 under the FRESCO rules as the default estimator, with LEXIS-S as the option to use where anytime properties matter.
+
 ### 4.4 Synthetic-only evidence (high)
 - **No real agents.** Every quantitative claim comes from Bernoulli oracles with assumed latency and crash models. The central practical claim, that default harnesses inflate error, needs measured values of (c₀, c₁) and redelivery rates from real agents and real queue systems.
 - **Required.** Run at least protocol steps 1–2 of §9.9 before submission: fault profiling and the replay-determinism audit.

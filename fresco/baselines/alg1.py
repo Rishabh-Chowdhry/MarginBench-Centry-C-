@@ -86,3 +86,38 @@ def run_alg1(reservoirs, cfg, rng):
             if lower(hits, cfg.holdout_reps, level) >= cfg.alpha:
                 return {"b_hat": k + 1, "slots": slots, "false": bool(ps[idx] <= cfg.alpha)}
     return {"b_hat": None, "slots": slots, "false": False}
+
+
+def run_alg1_multipass(reservoirs, cfg, rng, budget, stop_at_level=0):
+    """Repaired Algorithm 1 repeated in passes until the oracle budget is spent.
+    Pass n tests each of its K*T confirmations with an exact Clopper-Pearson bound
+    at level eps / (n (n + 1) K T), so the total error over all passes is <= eps.
+    Later passes only revisit levels below the current b_hat."""
+    K = len(reservoirs)
+    b_hat, slots, false, n = math.inf, 0, False, 0
+    while True:
+        n += 1
+        level = cfg.eps / (n * (n + 1) * K * cfg.top)
+        progressed = False
+        for k in range(K):
+            if k + 1 >= b_hat:
+                break
+            if slots + cfg.candidates_per_level * cfg.discovery_reps > budget:
+                return {"b_hat": None if b_hat == math.inf else b_hat, "slots": slots, "false": false}
+            ps = np.array([reservoirs[k](rng) for _ in range(cfg.candidates_per_level)])
+            disc = (rng.random((len(ps), cfg.discovery_reps)) < ps[:, None]).sum(axis=1)
+            slots += len(ps) * cfg.discovery_reps
+            progressed = True
+            for idx in np.argsort(-disc, kind="stable")[: cfg.top]:
+                if slots + cfg.holdout_reps > budget:
+                    return {"b_hat": None if b_hat == math.inf else b_hat, "slots": slots, "false": false}
+                hits = int((rng.random(cfg.holdout_reps) < ps[idx]).sum())
+                slots += cfg.holdout_reps
+                if cp_lower(hits, cfg.holdout_reps, level) >= cfg.alpha:
+                    b_hat = k + 1
+                    false = false or bool(ps[idx] <= cfg.alpha)
+                    break
+            if b_hat <= k + 1:
+                break
+        if not progressed or b_hat <= max(stop_at_level, 1):
+            return {"b_hat": None if b_hat == math.inf else b_hat, "slots": slots, "false": false}

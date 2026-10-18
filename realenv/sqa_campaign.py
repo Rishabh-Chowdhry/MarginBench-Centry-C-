@@ -255,9 +255,12 @@ def passes(inv, tc):
 def compare(acc, golden):
     gconf = {i for i, n in golden.items() if i[0] == "Confirmation" and n.payload["confirmed"]}
     conf = {i for i, n in acc.items() if i[0] == "Confirmation" and n.payload["confirmed"]}
-    wrong = sum(1 for i, n in acc.items() if i[0] != "Confirmation" and (i not in golden or golden[i].encode() != n.encode()))
+    wrong = sum(1 for i, n in acc.items() if i[0] != "Confirmation" and (i not in golden or golden[i].payload != n.payload))
+    links = sum(1 for i, n in acc.items() if i[0] != "Confirmation" and i in golden
+                and golden[i].payload == n.payload and golden[i].encode() != n.encode())
     correct = sum(1 for i, n in acc.items() if i in golden and golden[i].encode() == n.encode())
     return {"golden": len(golden), "recovered": correct, "recovery": correct / len(golden), "wrong_nonconf": wrong,
+            "content_right_links_differ": links,
             "added_conf": len(conf - gconf), "lost_conf": len(gconf - conf)}
 
 

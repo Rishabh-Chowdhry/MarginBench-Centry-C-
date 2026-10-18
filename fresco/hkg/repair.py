@@ -470,6 +470,9 @@ def decide(fabric, nid, cfg, rev, logs, der, derive_fn=None, params=None):
     if cfg.authenticate:
         if nid[0] in SIGNED:
             def anchored(tid):
+                d = der.derive(tid)                   # a derivable target's digest is exact
+                if d is not None:
+                    return d.digest()
                 items = collect(fabric, tid, cfg, rev, logs)[1]
                 counts, voters = tally(items, cfg)
                 if counts:

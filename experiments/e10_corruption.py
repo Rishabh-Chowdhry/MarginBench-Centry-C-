@@ -18,7 +18,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from experiments.common import run_jobs_streaming  # noqa: E402
 from fresco.hkg.corrupt import corrupt_fabric  # noqa: E402
-from fresco.hkg.graph import DOMAINS, DomainStore  # noqa: E402
+from fresco.hkg.graph import DOMAINS, DomainStore, Node  # noqa: E402
 from fresco.hkg.repair import QUARANTINED, RunParams, TWGRConfig, report, twgr  # noqa: E402
 from fresco.quintet.cluster import Quintet, QuintetConfig  # noqa: E402
 from fresco.sim.scenario import Level, Scenario  # noqa: E402
@@ -67,14 +67,16 @@ def score(q, fab, status, acc, scenario):
     rep = report(acc)
     got_conf = {k for _, k in rep["confirmed"]}
     nonconf = [i for i in truth if i[0] != "Confirmation"]
-    wrong = sum(1 for i in nonconf if i in acc and acc[i].encode() != truth[i])
+    wrong = sum(1 for i in nonconf if i in acc and acc[i].payload != Node.decode(truth[i]).payload)
+    links = sum(1 for i in nonconf if i in acc and acc[i].payload == Node.decode(truth[i]).payload
+                and acc[i].encode() != truth[i])
     correct = sum(1 for i in truth if i in acc and acc[i].encode() == truth[i])
     false_conf = 0
     for _, k in rep["confirmed"]:
         cand = q.nodes[("Candidate", k)].payload
         false_conf += int(sc.is_null(cand["level"], cand["content"]))
     return {"records": len(truth), "correct": correct, "recovery": correct / len(truth),
-            "wrong_nonconf": wrong,
+            "wrong_nonconf": wrong, "links_differ": links,
             "wrong_conf": sum(1 for i in truth if i[0] == "Confirmation" and i in acc and acc[i].encode() != truth[i]),
             "quarantined": sum(1 for s in status.values() if s == QUARANTINED),
             "phantoms": sum(1 for i in acc if i not in truth),

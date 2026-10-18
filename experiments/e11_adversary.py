@@ -113,10 +113,11 @@ def one(cfg):
                     control(fab, nid, bad, B)
                     status, acc = twgr(fab, q.p, VARIANTS[name], heal=False)
                     got = acc.get(nid)
-                    wrong = int(got is not None and got.encode() != truth[nid])
+                    wrong = int(got is not None and got.payload != Node.decode(truth[nid]).payload)
                     added = {kk for _, kk in report(acc)["confirmed"]} - true_conf
                     rows.append({"attack": attack, "type": nid[0], "k": k, "m": len(anchors), "b": b, "variant": name,
                                  "wrong": wrong, "correct": int(got is not None and got.encode() == truth[nid]),
+                                 "links_differ": int(got is not None and not wrong and got.encode() != truth[nid]),
                                  "quarantined": int(status.get(nid) == QUARANTINED),
                                  "conservative": int(wrong and got.payload == {"crashed": True}),
                                  "added_conf": len(added), "majority": int(2 * b > len(anchors))})

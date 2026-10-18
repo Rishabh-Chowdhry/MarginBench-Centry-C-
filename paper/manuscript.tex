@@ -40,16 +40,16 @@
 
 \title{Execution Semantics Are Statistics:\\ Rules for Valid Security Evaluation of LLM Agents on Unreliable Infrastructure}
 \author{\todo{AUTHORS AND AFFILIATIONS TO BE INSERTED}}
-\date{Working manuscript v2, 18 October 2026 --- simulation results only; real-agent results pending}
+\date{Working manuscript v3, 18 October 2026 --- synthetic results, a real-environment SQA campaign, and a small real-agent study}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
 \noindent\textbf{Purpose.} Security evaluations of LLM agents confirm vulnerabilities statistically, by repeating stochastic agent episodes, and run them on distributed harnesses whose defaults---at-least-once delivery, retry with fresh randomness, results consumed as they arrive, worker-local configuration---were designed for throughput. We ask whether these execution semantics preserve the error guarantees of the reported results.
-\textbf{Methods.} We state six execution rules and prove that, under them, both sequential (e-process) and fixed-sample (exact binomial) confirmation keep their nominal false-confirmation level under message loss, duplication, reordering, crashes, partitions and elastic membership. We show by construction that each corresponding default can break validity, and evaluate the rules in a deterministic fault-injection simulator and slot-level Monte Carlo with known ground truth.
-\textbf{Results.} At nominal level 0.05, executor defaults raised the false-confirmation probability of sequential confirmation to 0.08--0.13 and of fixed-sample confirmation to 0.11--0.999; with the rules it stayed at or below 0.035 in every configuration. A reference implementation scaled 25$\times$ on 32 workers at about 3.5 messages per episode. Auditing the counterfactual-margin estimator of MARGIN-Bench, we found it exceeds its nominal error (0.257) and give an exact repair. A shared coordinator gave no speed-up over independent runs with a split budget, and anytime-valid confirmation cost 2--5 points of power against the repaired fixed design.
-\textbf{Conclusion.} Execution semantics belong in the statistical protocol of agent security evaluation. Real-agent measurements are specified but not yet executed.
+\textbf{Methods.} We state six execution rules and prove that, under them, both sequential (e-process) and fixed-sample (exact binomial) confirmation keep their nominal false-confirmation level under message loss, duplication, reordering, crashes, partitions and elastic membership. We show by construction that each corresponding default can break validity, and evaluate the rules in a deterministic fault-injection simulator and slot-level Monte Carlo with known ground truth. We then split the coordinator into five services over a hash-anchored heterogeneous evidence graph, give a repair algorithm with proofs that it never fabricates evidence or adds confirmations, and test it under synthetic storage corruption, in a Docker deployment with real network, process and storage faults (Toxiproxy, kill, pause, partition, on-disk corruption), and with real agents in AgentDojo driven by a local open-weight model.
+\textbf{Results.} At nominal level 0.05, executor defaults raised the false-confirmation probability of sequential confirmation to 0.08--0.13 and of fixed-sample confirmation to 0.11--0.999; with the rules it stayed at or below 0.035 in every configuration. A reference implementation scaled 25$\times$ on 32 workers at about 3.5 messages per episode. Auditing the counterfactual-margin estimator of MARGIN-Bench, we found it exceeds its nominal error (0.257) and give an exact repair. A shared coordinator gave no speed-up over independent runs with a split budget, and anytime-valid confirmation cost 2--5 points of power against the repaired fixed design. Splitting the coordinator into five services over a self-verifying evidence graph, with a new repair algorithm (TWGR), made the evidence survive storage corruption. TWGR accepted no wrong record and added no confirmation in 640 repairs at corruption rates up to 0.6, recovering 0.98 of records at rate 0.3. Common alternatives produced false confirmations in up to all runs. A coordinated adversary succeeded exactly when it held a majority of a record's domains, as proved. Testing the deployment with real network, process and storage faults in Docker found seven defects in the networked service, all fixed, and the final campaign passed 19 of 21 test cases. In 60 real AgentDojo episodes, a small local model was never compromised, but its latency depended on the episode outcome.
+\textbf{Conclusion.} Execution semantics, and the integrity of the stored evidence, belong in the statistical protocol of agent security evaluation.
 \end{abstract}
 
 \noindent\textbf{Keywords:} LLM agents; security evaluation; statistical validity; distributed systems; fault tolerance; sequential testing; e-values; reproducibility
@@ -388,7 +388,7 @@ H-vs-Alg1 & LEXIS reaches $k^*$ as often as repaired Algorithm 1 & \textbf{refut
 H6-noninf & LEXIS-S within 0.05 of repaired Algorithm 1 & \textbf{not supported} (2/6 settings) \\
 H6-cheaper & LEXIS-S uses fewer episodes & \textbf{refuted} (ratio $\approx1.00$) \\
 H-cert & certificate coverage $\ge0.95$ & supported; bounds loose \\
-H-valid-real & measured fault profiles imply inflation & \todo{TO RUN} \\
+H-valid-real & measured fault profiles imply inflation & not testable (0 violations in 60 real episodes) \\
 H7-safe & TWGR accepts no wrong record, adds no confirmation (E10) & supported (0 in 640 repairs) \\
 H7-recover & recovery $\ge0.99$ at $\rho\le0.1$, $\ge0.90$ at $\rho=0.3$ & supported \\
 H7-ablate & every component contributes at $\rho=0.3$ & \textbf{not supported} (domain votes $\approx$ item votes) \\
@@ -485,19 +485,31 @@ TC & Fault and outcome & Verdict \\\midrule
 \end{table}
 
 \subsection{Real-agent experiments}\label{sec:real}
-Not yet run. The protocol: (1) profile 2,000 episodes per open-weight model to estimate timeout and crash rates separately for violating and benign trajectories, and measure redelivery rates of common queue configurations; (2) re-run the fault-injection studies of Tables~\ref{tab:fixed} and the sequential ablations with the measured rates; (3) replay 200 completed slots to verify seeded determinism; (4) compare procedures on 20 MARGIN-Bench scenario families with cluster bootstrap over families; (5) report authorized-task completion on paired counterparts. Table~\ref{tab:real} lists the required evidence.
+\paragraph{Setup (E13).} We ran AgentDojo v1.2.1~\cite{debenedetti2024agentdojo} simulated tool environments (banking and Slack suites) with the \texttt{important\_instructions} prompt-injection attack. A free open-weight model, Qwen2.5-1.5B served locally by Ollama, ran on CPU in a container, at temperature 0.7 with a per-episode seed. AgentDojo's own post-state checks labelled each episode with two outcomes: \emph{violation} (the injection task succeeded) and \emph{utility} (the authorized task succeeded). The design, fixed before execution, was 12 task pairs $\times$ 5 seeds, run in a predetermined order.
+
+\paragraph{Results.} All 60 episodes completed without harness errors.
+\begin{itemize}
+\item \textbf{No violation occurred} (0/60; 95\% CI [0, 0.060]). The model also completed only 14/60 authorized tasks (0.233 [0.144, 0.354]); this small model mostly fails to use tools at all, rather than resisting the attack.
+\item Episode latency had median 11.6\,s and p90 26.2\,s.
+\item Latency depended on the outcome. At a timeout set at the 90th percentile, 0.21 of successful episodes would time out against 0.07 of failed ones.
+\item Replaying 8 episodes with identical seeds reproduced all 8 outcomes. With mostly negative outcomes, this is weak evidence of determinism.
+\end{itemize}
+
+\paragraph{What this shows.} The outcome-dependent timeouts that make fresh-key retry invalid (R4) are present in real agent episodes. Here they appear for task success, because violations were too rare to measure. With no violations we cannot estimate a violation-specific inflation. Hypothesis H-valid-real therefore remains untested, and estimating it requires a model that the attack actually compromises.
 
 \begin{table}[!htbp]\centering\small
-\caption{Real-agent result shells. No value may be filled except from executed runs.}\label{tab:real}
-\begin{tabular}{lll}
+\caption{Real-agent results (E13, Qwen2.5-1.5B via Ollama, AgentDojo banking and Slack, 60 episodes). Quantities not yet measured remain marked.}\label{tab:real}
+\begin{tabular}{ll}
 \toprule
-Quantity & Model A & Model B \\\midrule
-Timeout/crash rate by outcome $(c_0,c_1)$ & \todo{TO RUN} & \todo{TO RUN} \\
-Redelivery rate of the naive queue & \todo{TO RUN} & \todo{TO RUN} \\
-Implied false-confirmation inflation per default & \todo{TO RUN} & \todo{TO RUN} \\
-Replay determinism (\% trace-hash match) & \todo{TO RUN} & \todo{TO RUN} \\
-Episodes to $\bhat$: repaired Algorithm 1 / LEXIS-S & \todo{TO RUN} & \todo{TO RUN} \\
-Authorized-task completion & \todo{TO RUN} & \todo{TO RUN} \\
+Quantity & Value \\\midrule
+Violation rate & 0/60 (95\% CI [0, 0.060]) \\
+Authorized-task completion & 14/60 = 0.233 [0.144, 0.354] \\
+Latency median / p90 & 11.6\,s / 26.2\,s \\
+P(timeout $|$ task completed) vs.\ (not completed), $\tau=$p90 & 0.21 vs.\ 0.07 \\
+Replay determinism (same outcome, same seed) & 8/8 \\
+Timeout rate by violation outcome $(c_0,c_1)$ & not estimable (no violations) \\
+Redelivery rate of a naive queue & \todo{TO RUN} \\
+Episodes to $\bhat$ on MARGIN-Bench families & \todo{TO RUN} \\
 \bottomrule\end{tabular}
 \end{table}
 

@@ -304,4 +304,29 @@ None of the three accepted a wrong record. The two-domain support rule costs ava
   - a convergence criterion at ρ = 0.4, where the second scan recovered one more record.
 - The campaign found **seven defects in the networked service (D1–D7)**, and all are fixed. Four were integrity defects, and all four share one root cause: *a coordinator trusted its own local storage after a fault*. They led to the **repair-before-serve** and **anchor-verified reads** principles. None of these defects was in TWGR.
 
-**E13.** See the manuscript's real-agent section and `results/processed/stage7_summary.md`.
+**E13.** Setup: AgentDojo v1.2.1 (banking and Slack suites), the `important_instructions` attack, and Qwen2.5-1.5B served by Ollama on CPU. 60 episodes (12 task pairs × 5 seeds) were run in a fixed order. The data are in `results/raw/e13_agentdojo.jsonl` and `e13_replay.jsonl`.
+
+| Measure | Result |
+|---|---|
+| Violations | **0/60** (95% CI [0, 0.060]) |
+| Authorized-task completion | 14/60 (0.233) |
+| Latency | median 11.6 s, p90 26.2 s |
+| Timeouts at the p90 deadline | 0.21 of successful episodes vs 0.07 of failed ones (outcome-dependent) |
+| Same-seed replay | 8/8 outcomes reproduced (weak evidence: mostly negative outcomes) |
+
+The violation-specific inflation (H-valid-real) is not estimable without violations, which would require a model that the attack actually compromises.
+
+## 10. Skeptical review of Stage 7 (internal)
+1. **The novelty is in the combination, not the parts.** Digests, replication, hash chains and quorum voting are all established. The claim rests on three things together, which we have not seen combined:
+   - write-time commitments as the only voters;
+   - exact cross-type derivation;
+   - direction-aware quarantine, with a proof that repair never adds a confirmation.
+
+   A reviewer may see this as an engineering composition. Theorem 2 (validity is preserved under arbitrary storage corruption meeting the quorum condition) is the part a statistics venue would value.
+2. **Theorem 1 is easy once stated.** Its value lies in the precise condition (2b < m per record and per derivation input) and in the fact that E11 matches the bound exactly. It should not be oversold.
+3. **E10's corruption is independent across items**, and its tampering is deterministic per type. Real storage faults are correlated: a failing disk, or a buggy writer that damages one record type everywhere. Whole-domain loss and the coordinated adversary only partly cover this.
+4. **H7-ablate failed:** per-domain voting brought nothing under random faults. Its justification is adversarial only, and E11 did not ablate it.
+5. **The two-domain support rule** costs about 16 points of recovery when 3 of 5 domains are lost, and Theorem 1 does not need it. Its retention needs an argument beyond caution, or it should become a configuration option.
+6. **The SQA campaign is the most convincing part, but also the most humbling.** It found seven defects, four of them integrity bugs, in a design whose algorithm was proven correct. Each test case ran once per campaign run, on one host. A longer soak test and a multi-host deployment are needed before claiming production readiness.
+7. **E13 is small and uninformative about violations.** The local model is too weak to be compromised, and too weak to complete most tasks. The latency–outcome dependence is the only transferable finding.
+

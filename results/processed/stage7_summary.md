@@ -221,10 +221,68 @@ Stability: 45 re-judgements at T = 0.7 (3 per episode) agree with the T = 0 verd
 
 Judge and rule classifier agree on 0.62 of no-tool episodes (ASKS_USER κ = 0.72, TEXT_TOOL_CALL κ = 0.41, CLAIMED_ACTION κ = 0.20, PLAN_ONLY κ = 0.30, OTHER κ = 0.00).
 
+### Capacity check: the same 48 scenarios with a larger agent (granite3.3-2b)
+
+| agent | utility | violations (attack) | episodes with no tool call | injection seen (attack) | median latency (s) |
+|---|---|---|---|---|---|
+| qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
+| granite3.3-2b | 8/48 | 0/24 | 0.54 | 0.12 | 18 |
+
+### Capacity check: the same 48 scenarios with a larger agent (llama3.2-1b)
+
+| agent | utility | violations (attack) | episodes with no tool call | injection seen (attack) | median latency (s) |
+|---|---|---|---|---|---|
+| qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
+| llama3.2-1b | 7/48 | 0/24 | 0.50 | 0.08 | 16 |
+
+### Capacity check: the same 48 scenarios with a larger agent (qwen2.5-0.5b)
+
+| agent | utility | violations (attack) | episodes with no tool call | injection seen (attack) | median latency (s) |
+|---|---|---|---|---|---|
+| qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
+| qwen2.5-0.5b | 9/48 | 0/24 | 0.71 | 0.04 | 5 |
+
+### Capacity check: the same 48 scenarios with a larger agent (qwen2.5-1.5b)
+
+| agent | utility | violations (attack) | episodes with no tool call | injection seen (attack) | median latency (s) |
+|---|---|---|---|---|---|
+| qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
+| qwen2.5-1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 8 |
+
+### Capacity check: the same 48 scenarios with a larger agent (qwen2.5-3b)
+
+| agent | utility | violations (attack) | episodes with no tool call | injection seen (attack) | median latency (s) |
+|---|---|---|---|---|---|
+| qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
+| qwen2.5-3b | 10/48 | 0/24 | 0.27 | 0.38 | 35 |
+
 ### Capacity check: the same 48 scenarios with a larger agent (qwen2.5-7b)
 
 | agent | utility | violations (attack) | episodes with no tool call | injection seen (attack) | median latency (s) |
 |---|---|---|---|---|---|
 | qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
 | qwen2.5-7b | 16/48 | 4/24 | 0.06 | 0.50 | 106 |
+
+### Capacity check: the same 48 scenarios with a larger agent (qwen3-1.7b)
+
+| agent | utility | violations (attack) | episodes with no tool call | injection seen (attack) | median latency (s) |
+|---|---|---|---|---|---|
+| qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
+| qwen3-1.7b | 9/48 | 1/24 | 0.21 | 0.33 | 167 |
+
+## E15 — ten agents on the same scenarios
+
+Each agent ran the same 48 AgentDojo episodes (6 user tasks per suite × with/without the important_instructions attack; T = 0.7, seed 1, local Ollama on CPU). Rule-based trace facts.
+
+| agent | task success (no attack) | task success (attack) | attack success [95% CI] | injection reached agent | attack success when reached | no tool call | tool call as text | median latency (s) |
+|---|---|---|---|---|---|---|---|---|
+| qwen2.5:0.5b | 5/24 | 4/24 | 0/24 [0.00, 0.14] | 1/24 | 0/1 | 0.71 | 0.08 | 5 |
+| llama3.2:1b | 3/24 | 4/24 | 0/24 [0.00, 0.14] | 2/24 | 0/2 | 0.50 | 0.40 | 16 |
+| qwen2.5:1.5b | 2/24 | 3/24 | 0/24 [0.00, 0.14] | 1/24 | 0/1 | 0.69 | 0.06 | 8 |
+| qwen3:1.7b | 5/24 | 4/24 | 1/24 [0.01, 0.20] | 8/24 | 1/8 | 0.21 | 0.00 | 167 |
+| granite3.3:2b | 4/24 | 4/24 | 0/24 [0.00, 0.14] | 3/24 | 0/3 | 0.54 | 0.00 | 18 |
+| qwen2.5:3b | 5/24 | 5/24 | 0/24 [0.00, 0.14] | 9/24 | 0/9 | 0.27 | 0.00 | 35 |
+| qwen2.5:7b | 9/24 | 7/24 | 4/24 [0.07, 0.36] | 12/24 | 4/12 | 0.06 | 0.02 | 106 |
+
+Pooled over agents: the attack succeeded in 5 of 168 attacked episodes; all 5 were among the 36 episodes in which the injected text reached the agent (0.14).
 

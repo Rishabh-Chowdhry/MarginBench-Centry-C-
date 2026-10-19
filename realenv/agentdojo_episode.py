@@ -47,8 +47,9 @@ def build_pipeline(model, temperature, seed, max_iters=6):
     client = openai.OpenAI(base_url=OLLAMA, api_key="ollama", timeout=600)
     llm = SeededOpenAILLM(client, model, temperature, seed)
     system = load_system_message(None)
-    if model.startswith("qwen3"):                  # Qwen3 soft switch: non-thinking mode (thinking took up to
-        system += "\n/no_think"                    # 25 min per episode on CPU; see results/raw/*thinking*)
+    if model.startswith("qwen3"):                  # Qwen3 soft switch for non-thinking mode. It made no
+        system += "\n/no_think"                    # measurable difference to latency here: Qwen3 episodes are
+                                                   # long because it makes many tool calls (up to 11)
     pipe = AgentPipeline([SystemMessage(system), InitQuery(), llm,
                           ToolsExecutionLoop([ToolsExecutor(), llm], max_iters=max_iters)])
     pipe.name = f"local-{model}"   # "local" lets AgentDojo attacks address it as "Local model"

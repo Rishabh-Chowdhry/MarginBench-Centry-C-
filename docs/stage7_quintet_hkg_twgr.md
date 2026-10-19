@@ -389,6 +389,32 @@ The table is in `results/processed/stage7_summary.md`.
 
 The violation-specific inflation (H-valid-real) is not estimable without violations, which would require a model that the attack actually compromises.
 
+**E14 — why the agent episodes fail (judge LLM, every scenario).**
+
+*Setup.*
+- Every user task of the four AgentDojo v1.2.1 suites (97 tasks), with the important_instructions attack (rotating injection task) and without it: 194 episodes, Qwen2.5-1.5B agent, full traces.
+- Judge: Qwen2.5-7B at T = 0. Its output is constrained by a JSON schema to a fixed taxonomy and to AgentDojo's labels.
+- Validation: rule-based trace facts and a stability re-judging.
+- Sources: `realenv/e14_judge.py` and `results/raw/e14_*.jsonl`; tables in `results/processed/stage7_summary.md`; figure `figures/fig16_failure_taxonomy.png`.
+
+*Findings.*
+1. **Primary cause: no tool use.** 136 of the 177 failed episodes contain no tool call. In ~55% of no-tool episodes the agent asks the user for data its tools could fetch; judge and rule classifier agree with κ = 0.72. Secondary causes:
+   - tool calls written as text JSON instead of structured calls (10–12 episodes);
+   - claimed but unperformed actions;
+   - plans without execution.
+2. **Zero violations reflect non-exposure.** The injected text reached the agent in only 7 of 97 attacked episodes; it ignored it all 7 times. The attack changed task success in 3 of 97 paired tasks.
+3. **Capacity is the cause.** The same 48 stratified scenarios (6 tasks per suite, with and without the attack) were rerun with Qwen2.5-7B as the agent:
+   - episodes without a tool call fell from 69% to 6%;
+   - task success rose from 5/48 to 16/48 (exact McNemar p = 0.007);
+   - the injection reached the agent in 12 of 24 attacked episodes;
+   - **4/24 violations** (0.17, 95% CI [0.07, 0.36]): money sent, Slack messages, and a hotel reserved for the attacker.
+4. **Judge reliability.**
+   - Good on narrow observable questions: exposure (89% agreement, κ = 0.47) and asks-user (κ = 0.72).
+   - Poor on its broad "main reason" label (κ = 0.19 for no tool use; it often says "wrong tool" for episodes with zero tool calls) and on finer behaviours (κ 0.20–0.41).
+   - Re-judging at T = 0.7 reproduces 78% of its categories.
+
+   Counts are therefore taken from trace facts, and the judge supplies the explanations.
+
 ## 10. Skeptical review of Stage 7 (internal)
 1. **The novelty is in the combination, not the parts.** Digests, replication, hash chains and quorum voting are all established. The claim rests on three things together, which we have not seen combined:
    - write-time commitments as the only voters;

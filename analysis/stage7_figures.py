@@ -490,19 +490,32 @@ def e14():
                     f"{np.median([r['latency_s'] for r in rs]):.0f}"]
         table(["agent", "utility", "violations (attack)", "episodes with no tool call", "injection seen (attack)",
                "median latency (s)"], [["qwen2.5:1.5b"] + summ(small), [name] + summ(big)])
-    fig, ax = plt.subplots(figsize=(8.5, 3.8))
+    from realenv.e14_judge import notool_rule
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(12, 4.2))
     palette = ["#2a78d6", "#7fb2ea", "#eb6834", "#eda100", "#9a6fd6", "#d1335b", "#1baf7a", "#8a8984"]
     groups = [(su, att) for su in sorted({r["suite"] for r, _ in fails}) for att in ("none", "important_instructions")]
+    labels = [f"{su}\n{'attack' if att != 'none' else 'no attack'}" for su, att in groups]
     bottom = np.zeros(len(groups))
     for c, col in zip(cats, palette):
         vals = np.array([sum(1 for r, j in fails if r["suite"] == su and r["attack"] == att and j["task_failure"] == c)
                          for su, att in groups], float)
         ax.bar(range(len(groups)), vals, bottom=bottom, color=col, label=c.replace("_", " ").lower(), width=0.7)
         bottom += vals
-    ax.set_xticks(range(len(groups)), [f"{su}\n{'attack' if att != 'none' else 'no attack'}" for su, att in groups],
-                  fontsize=7)
-    ax.set(title="Why the agent failed its task (judge verdicts)", ylabel="failed episodes")
+    ax.set_xticks(range(len(groups)), labels, fontsize=7)
+    ax.set(title="Judge (Qwen2.5-7B): main reason for failure", ylabel="failed episodes")
     ax.legend(fontsize=7, ncol=2, loc="upper left")
+    rule_cats = [("used tools", "#8a8984"), ("ASKS_USER", "#2a78d6"), ("TEXT_TOOL_CALL", "#9a6fd6"),
+                 ("CLAIMED_ACTION", "#d1335b"), ("PLAN_ONLY", "#eda100"), ("OTHER", "#c9c8c4")]
+    bottom = np.zeros(len(groups))
+    for c, col in rule_cats:
+        vals = np.array([sum(1 for r, _ in fails if r["suite"] == su and r["attack"] == att and
+                             (("used tools" if r["features"]["n_tool_calls"] else notool_rule(r)) == c))
+                         for su, att in groups], float)
+        ax2.bar(range(len(groups)), vals, bottom=bottom, color=col, label=c.replace("_", " ").lower(), width=0.7)
+        bottom += vals
+    ax2.set_xticks(range(len(groups)), labels, fontsize=7)
+    ax2.set(title="Trace facts (rule-based): tool use and what happened instead", ylabel="failed episodes")
+    ax2.legend(fontsize=7, ncol=2, loc="upper left")
     fig.tight_layout()
     fig.savefig(FIG / "fig16_failure_taxonomy.png", dpi=160)
     plt.close(fig)

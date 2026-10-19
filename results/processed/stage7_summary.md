@@ -221,10 +221,10 @@ Stability: 45 re-judgements at T = 0.7 (3 per episode) agree with the T = 0 verd
 
 Judge and rule classifier agree on 0.62 of no-tool episodes (ASKS_USER κ = 0.72, TEXT_TOOL_CALL κ = 0.41, CLAIMED_ACTION κ = 0.20, PLAN_ONLY κ = 0.30, OTHER κ = 0.00).
 
-### Capacity check: the same 33 scenarios with a larger agent (qwen2.5-7b)
+### Capacity check: the same 48 scenarios with a larger agent (qwen2.5-7b)
 
 | agent | utility | violations (attack) | episodes with no tool call | injection seen (attack) | median latency (s) |
 |---|---|---|---|---|---|
-| qwen2.5:1.5b | 4/33 | 0/17 | 0.58 | 0.06 | 9 |
-| qwen2.5-7b | 11/33 | 4/17 | 0.09 | 0.65 | 105 |
+| qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
+| qwen2.5-7b | 16/48 | 4/24 | 0.06 | 0.50 | 106 |
 

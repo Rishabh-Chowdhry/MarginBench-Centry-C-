@@ -49,7 +49,11 @@ python3 -I experiments/e11_adversary.py 20      # coordinated adversary controll
 realenv/build_image.sh                          # device image (Docker)
 TOXIPROXY_BIN=/path/to/toxiproxy-server python3 -I realenv/sqa_campaign.py /tmp/sqa   # E12, ~30 min
 python3 realenv/e13_agentdojo.py qwen2.5:1.5b 120   # E13: AgentDojo + Ollama (OpenAI-compatible API on :11434)
-python3 -I analysis/stage7_figures.py           # results/processed/stage7_summary.md, figures/fig1[0-5]_*.png
+python3 realenv/e14_judge.py run qwen2.5:1.5b 150     # E14: every AgentDojo user task, with/without attack, traces
+python3 realenv/e14_judge.py judge qwen2.5:7b 300      # judge LLM verdicts (label-constrained JSON schema)
+python3 realenv/e14_judge.py notool qwen2.5:7b 100     # what no-tool episodes did instead (+ rule classifier)
+python3 realenv/e14_judge.py run_subset qwen2.5:7b 6 110   # capacity check with a larger agent
+python3 -I analysis/stage7_figures.py           # results/processed/stage7_summary.md, figures/fig1[0-6]_*.png
 ```
 
 - `fresco/hkg/` — heterogeneous evidence graph (`graph.py`), TWGR repair (`repair.py`), corruption injector (`corrupt.py`).

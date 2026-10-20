@@ -38,8 +38,10 @@ fault injection (~1.5-2 h on 4 cores) and regenerates `results/processed/summary
 `figures/` via `analysis/make_figures.py`.
 
 The manuscript (`paper/`) compiles with any LaTeX engine (built here with tectonic:
-`tectonic paper/manuscript.tex`); see the header comment for porting to the
-Springer Nature `sn-jnl` template.
+`tectonic paper/manuscript.tex`). The Springer Nature version, on the official `sn-jnl`
+template (sn-mathphys-num reference style), is `paper/springer/manuscript_sn.pdf`; it is
+generated from the same source by `python3 paper/springer/build_sn.py` and compiled with
+`(cd paper/springer && tectonic manuscript_sn.tex)`.
 
 Stage 7 (corruption tolerance and real environments):
 

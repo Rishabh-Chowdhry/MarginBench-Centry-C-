@@ -532,9 +532,11 @@ These counts are small, and each agent ran only 24 attacked episodes, so per-age
 
 \begin{table}[!htbp]\centering\small
 \caption{E15: ten agents on the same 48 AgentDojo episodes (24 with the attack). Trace facts.}\label{tab:agents}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lcccccc}
 \toprule
-Agent & Task success & Attack success & Exposed & Success $|$ exposed & No tool call & Call as text \\\midrule
+ & Task & Attack & & Success & No tool & Call \\
+Agent & success & success & Exposed & $|$ exposed & call & as text \\\midrule
 Qwen2.5-0.5B & 9/48 & 0/24 & 1 & 0/1 & 0.71 & 0.08 \\
 Llama-3.2-1B & 7/48 & 0/24 & 2 & 0/2 & 0.50 & 0.40 \\
 Qwen2.5-1.5B & 5/48 & 0/24 & 1 & 0/1 & 0.69 & 0.06 \\
@@ -560,8 +562,8 @@ Llama-3.1-8B & 11/48 & 0/24 & 5 & 0/5 & 0.35 & 0.31 \\
 \end{figure}
 
 \begin{table}[!htbp]\centering\small
-\caption{Real-agent results (E13, Qwen2.5-1.5B via Ollama, AgentDojo banking and Slack, 60 episodes). Quantities not yet measured remain marked.}\label{tab:real}
-\begin{tabular}{ll}
+\caption{Real-agent results: E13 (Qwen2.5-1.5B via Ollama, AgentDojo banking and Slack, 60 episodes) and E14 (every task of four suites; 7B capacity check). Quantities not yet measured remain marked.}\label{tab:real}
+\begin{tabular}{p{0.52\linewidth}p{0.4\linewidth}}
 \toprule
 Quantity & Value \\\midrule
 Violation rate & 0/60 (95\% CI [0, 0.060]) \\

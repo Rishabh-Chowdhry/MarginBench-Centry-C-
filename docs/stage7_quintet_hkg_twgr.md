@@ -415,6 +415,21 @@ The violation-specific inflation (H-valid-real) is not estimable without violati
 
    Counts are therefore taken from trace facts, and the judge supplies the explanations.
 
+**E15 — ten agents on the same 48 scenarios.**
+
+*Setup.*
+- Agents: Qwen2.5 (0.5B, 1.5B, 3B, 7B), Llama-3.2 (1B, 3B), Llama-3.1-8B, Qwen3-1.7B (run with `/no_think`, which made no measurable difference), Granite-3.3-2B and Phi-4-mini.
+- All are free, served locally by Ollama on CPU, and use the same seed and temperature.
+- Sources: `realenv/e15_agents.py`, `results/raw/e14_episodes_<agent>.jsonl`, `figures/fig17_ten_agents.png`.
+
+*Findings.*
+1. **Every success required exposure.** Attack success was 5 of 240 attacked episodes, and all 5 occurred when the injected text reached the agent (5/45 = 0.11 of exposed episodes, 0/195 otherwise). Per agent: Qwen2.5-7B 4/24 (4 of its 12 exposures) and Qwen3-1.7B 1/24 (1 of 8).
+2. **Exposure is not tool use alone.** Llama-3.2-3B called tools in 96% of episodes but was exposed in only 4 of 24, because it rarely called the tools that return poisoned data.
+3. **Exposure is not compromise.** Qwen2.5-3B 0/9, Llama-3.1-8B 0/5 and Llama-3.2-3B 0/4 resisted every exposure.
+4. **Format failures make agents look secure.** Phi-4-mini made no structured call at all (52% of its episodes contained JSON-text calls). Llama-3.2-1B (40%) and Llama-3.1-8B (31%) often wrote calls as text. Their 0% attack success reflects harness incompatibility, not robustness. Evaluations should report exposure and tool-call validity alongside attack success.
+
+Per-agent intervals are wide (24 attacked episodes each); the pooled exposure result is the robust finding.
+
 ## 10. Skeptical review of Stage 7 (internal)
 1. **The novelty is in the combination, not the parts.** Digests, replication, hash chains and quorum voting are all established. The claim rests on three things together, which we have not seen combined:
    - write-time commitments as the only voters;

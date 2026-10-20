@@ -568,11 +568,12 @@ def e15():
     for r, c in zip(rows, cols):
         axs[0].scatter(1 - r["notool"], r["seen"] / r["n_att"], s=60, color=c, label=r["agent"], zorder=3)
         axs[1].scatter(r["seen"] / r["n_att"], r["viol"] / r["n_att"], s=60, color=c, zorder=3)
-        axs[1].annotate(r["agent"], (r["seen"] / r["n_att"], r["viol"] / r["n_att"]), fontsize=7,
-                        xytext=(4, 3), textcoords="offset points")
+        if r["viol"]:                                  # colours as in the left legend
+            axs[1].annotate(r["agent"], (r["seen"] / r["n_att"], r["viol"] / r["n_att"]), fontsize=7,
+                            xytext=(4, 3), textcoords="offset points")
     axs[0].set(title="Using tools exposes the agent to the injection", xlabel="episodes with a tool call",
                ylabel="attacked episodes where the injection reached the agent", xlim=(-0.03, 1.03), ylim=(-0.03, 1.03))
-    axs[1].set(title="Exposure, then compromise", xlabel="injection reached the agent (fraction of attacked)",
+    axs[1].set(title="Exposure, then compromise (colours as left)", xlabel="injection reached the agent (fraction of attacked)",
                ylabel="attack success (fraction of attacked)", xlim=(-0.03, 1.03), ylim=(-0.03, 0.6))
     axs[0].legend(fontsize=7, loc="upper left")
     fig.tight_layout()

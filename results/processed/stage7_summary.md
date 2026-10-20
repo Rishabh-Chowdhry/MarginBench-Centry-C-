@@ -228,12 +228,33 @@ Judge and rule classifier agree on 0.62 of no-tool episodes (ASKS_USER κ = 0.72
 | qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
 | granite3.3-2b | 8/48 | 0/24 | 0.54 | 0.12 | 18 |
 
+### Capacity check: the same 48 scenarios with a larger agent (llama3.1-8b)
+
+| agent | utility | violations (attack) | episodes with no tool call | injection seen (attack) | median latency (s) |
+|---|---|---|---|---|---|
+| qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
+| llama3.1-8b | 11/48 | 0/24 | 0.35 | 0.21 | 96 |
+
 ### Capacity check: the same 48 scenarios with a larger agent (llama3.2-1b)
 
 | agent | utility | violations (attack) | episodes with no tool call | injection seen (attack) | median latency (s) |
 |---|---|---|---|---|---|
 | qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
 | llama3.2-1b | 7/48 | 0/24 | 0.50 | 0.08 | 16 |
+
+### Capacity check: the same 48 scenarios with a larger agent (llama3.2-3b)
+
+| agent | utility | violations (attack) | episodes with no tool call | injection seen (attack) | median latency (s) |
+|---|---|---|---|---|---|
+| qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
+| llama3.2-3b | 8/48 | 0/24 | 0.04 | 0.17 | 68 |
+
+### Capacity check: the same 48 scenarios with a larger agent (phi4-mini)
+
+| agent | utility | violations (attack) | episodes with no tool call | injection seen (attack) | median latency (s) |
+|---|---|---|---|---|---|
+| qwen2.5:1.5b | 5/48 | 0/24 | 0.69 | 0.04 | 10 |
+| phi4-mini | 3/48 | 0/24 | 1.00 | 0.00 | 28 |
 
 ### Capacity check: the same 48 scenarios with a larger agent (qwen2.5-0.5b)
 
@@ -282,7 +303,10 @@ Each agent ran the same 48 AgentDojo episodes (6 user tasks per suite × with/wi
 | qwen3:1.7b | 5/24 | 4/24 | 1/24 [0.01, 0.20] | 8/24 | 1/8 | 0.21 | 0.00 | 167 |
 | granite3.3:2b | 4/24 | 4/24 | 0/24 [0.00, 0.14] | 3/24 | 0/3 | 0.54 | 0.00 | 18 |
 | qwen2.5:3b | 5/24 | 5/24 | 0/24 [0.00, 0.14] | 9/24 | 0/9 | 0.27 | 0.00 | 35 |
+| llama3.2:3b | 4/24 | 4/24 | 0/24 [0.00, 0.14] | 4/24 | 0/4 | 0.04 | 0.04 | 68 |
+| phi4-mini | 1/24 | 2/24 | 0/24 [0.00, 0.14] | 0/24 | – | 1.00 | 0.52 | 28 |
 | qwen2.5:7b | 9/24 | 7/24 | 4/24 [0.07, 0.36] | 12/24 | 4/12 | 0.06 | 0.02 | 106 |
+| llama3.1:8b | 5/24 | 6/24 | 0/24 [0.00, 0.14] | 5/24 | 0/5 | 0.35 | 0.31 | 96 |
 
-Pooled over agents: the attack succeeded in 5 of 168 attacked episodes; all 5 were among the 36 episodes in which the injected text reached the agent (0.14).
+Pooled over agents: the attack succeeded in 5 of 240 attacked episodes; all 5 were among the 45 episodes in which the injected text reached the agent (0.11).
 

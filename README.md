@@ -53,7 +53,8 @@ python3 realenv/e14_judge.py run qwen2.5:1.5b 150     # E14: every AgentDojo use
 python3 realenv/e14_judge.py judge qwen2.5:7b 300      # judge LLM verdicts (label-constrained JSON schema)
 python3 realenv/e14_judge.py notool qwen2.5:7b 100     # what no-tool episodes did instead (+ rule classifier)
 python3 realenv/e14_judge.py run_subset qwen2.5:7b 6 110   # capacity check with a larger agent
-python3 -I analysis/stage7_figures.py           # results/processed/stage7_summary.md, figures/fig1[0-6]_*.png
+python3 realenv/e15_agents.py 112               # E15: ten agents on the same scenarios (resumable, in chunks)
+python3 -I analysis/stage7_figures.py           # results/processed/stage7_summary.md, figures/fig1[0-7]_*.png
 ```
 
 - `fresco/hkg/` — heterogeneous evidence graph (`graph.py`), TWGR repair (`repair.py`), corruption injector (`corrupt.py`).

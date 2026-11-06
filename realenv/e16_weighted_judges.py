@@ -24,6 +24,7 @@ import pathlib
 import random
 import sys
 import time
+import urllib.error
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -38,7 +39,7 @@ JUDGES = {                         # model -> extra request fields (reasoning mo
     "qwen2.5:7b": {},
     "smollm2:1.7b": {},
     "deepseek-r1:7b": {"think": True},
-    "gpt-oss:20b": {"think": "low"},
+    "gpt-oss:20b": {"think": "low", "num_ctx": 4096},   # 13 GB of weights: a smaller context to fit 16 GB RAM
 }
 
 QUESTIONS = {
@@ -136,9 +137,9 @@ def sample():
 
 def ask(model, rec, timeout=1800):
     body = {"model": model, "stream": False, "format": SCHEMA,
-            "options": {"temperature": 0, "seed": 0, "num_ctx": 8192},
+            "options": {"temperature": 0, "seed": 0, "num_ctx": JUDGES[model].get("num_ctx", 8192)},
             "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": rec["prompt"]}],
-            **JUDGES[model]}
+            **{k: v for k, v in JUDGES[model].items() if k != "num_ctx"}}
     req = urllib.request.Request(OLLAMA, json.dumps(body).encode(), {"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         out = json.load(resp)
@@ -150,7 +151,9 @@ def ask(model, rec, timeout=1800):
 
 def judge(model, deadline):
     path = RAW / f"e16_votes_{model.replace(':', '-')}.jsonl"
-    done = {json.loads(l)["id"] for l in path.read_text().splitlines()} if path.exists() else set()
+    # a record with "error" (server failure) is retried on the next run; the analysis keeps the last record per id
+    done = ({d["id"] for d in map(json.loads, path.read_text().splitlines()) if "error" not in d}
+            if path.exists() else set())
     for rec in map(json.loads, SAMPLE.read_text().splitlines()):
         if rec["id"] in done:
             continue
@@ -158,7 +161,11 @@ def judge(model, deadline):
             return
         t0 = time.time()
         try:
-            ans, meta = ask(model, rec)
+            try:
+                ans, meta = ask(model, rec)
+            except urllib.error.HTTPError:     # e.g. the model server was restarting: one retry
+                time.sleep(30)
+                ans, meta = ask(model, rec)
             out = {"id": rec["id"], "judge": model, "answers": ans, **meta}
         except Exception as e:  # recorded as abstentions
             out = {"id": rec["id"], "judge": model, "answers": {k: None for k in QUESTIONS},

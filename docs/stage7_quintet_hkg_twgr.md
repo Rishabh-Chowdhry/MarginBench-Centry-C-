@@ -430,6 +430,35 @@ The violation-specific inflation (H-valid-real) is not estimable without violati
 
 Per-agent intervals are wide (24 attacked episodes each); the pooled exposure result is the robust finding.
 
+**E16 — a weighted graph of four LLM judges.**
+
+*Setup.*
+- Judges: Qwen2.5-7B, SmolLM2-1.7B, DeepSeek-R1-7B (Qwen distill, thinking on) and gpt-oss-20b (low reasoning effort), all free and local on CPU via Ollama, with temperature 0 and a JSON-schema output.
+- Sample: 200 E14/E15 episodes (all 5 hijacked included), split by stratum into 102 calibration and 98 test episodes.
+- Each judge answers five yes/no questions: TOOL, TOOL_ERROR, EXPOSED, TASK_DONE and HIJACKED. Truth comes from the trace, or from AgentDojo's checks, which the judges never see.
+- Judges and (episode, question) items form a bipartite graph. Each edge is weighted log(acc/(1−acc)), using the judge's calibration accuracy on that question.
+- Aggregators: best single judge (chosen on calibration), plain majority, weighted majority, supervised naive Bayes, and unsupervised Dawid–Skene EM.
+- Sources: `realenv/e16_weighted_judges.py`, `analysis/e16_analysis.py`, `results/processed/e16_summary.md`, `figures/fig18_judge_graph.png`.
+
+*Findings (held-out, pooled over questions, 95% episode-bootstrap CIs).*
+
+| Method | Accuracy | κ |
+|---|---|---|
+| gpt-oss-20b (= best judge on every question) | 0.955 | 0.87 |
+| supervised naive Bayes | 0.945 | 0.83 |
+| weighted graph | 0.935 | 0.81 |
+| Dawid–Skene EM | 0.883 | 0.69 |
+| plain majority | 0.876 | 0.62 |
+
+Single judges: Qwen 0.873, R1 0.803, SmolLM2 0.729.
+
+1. **Weighting helps against majority.** The weighted graph beats plain majority by +0.060 [+0.038, +0.084] and Dawid–Skene EM by +0.052 [+0.028, +0.077]. Unweighted majority collapses to chance on EXPOSED and HIJACKED, because three weak judges outvote the strong one.
+2. **Weighting does not beat the best judge.** Weighted minus best is −0.020 [−0.039, −0.003]. Naive Bayes minus best is −0.010 [−0.024, +0.002]. When one judge is better on every question, the calibrated weights still let the weaker judges outvote it when they agree. On HIJACKED, for example, Qwen, SmolLM2 and R1 have a combined weight of 7.4 against gpt-oss's 4.0, and they agree on "not hijacked", which is wrong for one of the two test positives. An ensemble pays off only if its members' errors are less correlated than this.
+3. **Reasoning did not help a small judge.** DeepSeek-R1-7B is the slowest judge (median 70 s per episode) and is worse than Qwen2.5-7B, which has no reasoning (0.803 vs 0.873). R1 is at chance on EXPOSED (0.49) and HIJACKED (0.48).
+4. **SmolLM2-1.7B carries no signal on TOOL.** Its weight is −0.04, and it answers one constant value on TOOL_ERROR and EXPOSED.
+
+*Caveats.* HIJACKED has only 2 positives in the test split, so its per-question numbers are anecdotal. This is one sample of 200 episodes with one prompt. The calibration split is small, which is why Laplace smoothing is used.
+
 ## 10. Skeptical review of Stage 7 (internal)
 1. **The novelty is in the combination, not the parts.** Digests, replication, hash chains and quorum voting are all established. The claim rests on three things together, which we have not seen combined:
    - write-time commitments as the only voters;

@@ -56,6 +56,8 @@ python3 realenv/e14_judge.py judge qwen2.5:7b 300      # judge LLM verdicts (lab
 python3 realenv/e14_judge.py notool qwen2.5:7b 100     # what no-tool episodes did instead (+ rule classifier)
 python3 realenv/e14_judge.py run_subset qwen2.5:7b 6 110   # capacity check with a larger agent
 python3 realenv/e15_agents.py 112               # E15: ten agents on the same scenarios (resumable, in chunks)
+sh realenv/e16_run_all.sh 110                   # E16: four judges (Qwen2.5, SmolLM2, DeepSeek-R1, gpt-oss), resumable
+python3 -I analysis/e16_analysis.py             # E16 weighted judge graph -> results/processed/e16_summary.md, fig18
 python3 -I analysis/stage7_figures.py           # results/processed/stage7_summary.md, figures/fig1[0-7]_*.png
 ```
 
